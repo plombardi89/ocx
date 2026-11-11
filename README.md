@@ -52,7 +52,7 @@ Every agent follows four rules for anything people read: code comments, docs, pl
 
 1. Code comments are short and explain why, not how. TODOs must stand on their own and go to Phil, who decides whether to fix or remove them; they block merging until he does.
 2. Code comments stand on their own: no references to plans, reviews, tickets, or requests. Tests are named for the behavior they protect.
-3. Plain English: simple accurate words, technical terms explained on first use, numbered lists or diagrams for steps (plain text in code, Mermaid allowed in docs).
+3. Plain English: simple accurate words, technical terms and uncommon abbreviations explained on first use, numbered lists or diagrams for steps (plain text in code, Mermaid allowed in docs).
 4. Lists with a natural order are numbered 1, 2, 3, through the last item, most important first; nested lists too. Bullets only when there is no order.
 
 The reviewer enforces these with a separate finding category:

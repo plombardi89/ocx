@@ -10,9 +10,9 @@ Invoicing and refunds code needs to divide an amount into equal installments wit
 
 ## Non-goals
 
-- A web endpoint; only Go code in this module calls it.
+- An HTTP endpoint; only Go code in this module calls it.
 - Weighted or percentage-based splits.
-- Currencies other than the United States dollar.
+- Currencies other than US cents.
 
 ## Acceptance criteria
 
