@@ -8,6 +8,8 @@
   //   driver       github-copilot/claude-opus-5.5        session default (you drive with it)
   //   reviewer     github-copilot/gpt-6.1-sol#xhigh      other family than the driver, on purpose
   //   plan-critic  github-copilot/gpt-6-astra#high       other family than the driver, on purpose
+  //   debugger     github-copilot/claude-opus-5.5#xhigh  deep, long-context investigation
+  //   consultant   github-copilot/gpt-6.1-sol#xhigh      other family than the driver, on purpose
   //   search       github-copilot/claude-haiku-5.5       built-in explore subagent
   //
   // MAI models are never used; `make check` fails if one is referenced.
@@ -51,6 +53,8 @@
     { "action": "shell", "resource": "pytest *", "effect": "allow" },
     { "action": "shell", "resource": "python -m pytest *", "effect": "allow" },
     { "action": "shell", "resource": "python3 -m pytest *", "effect": "allow" },
+    { "action": "shell", "resource": "python -m unittest *", "effect": "allow" },
+    { "action": "shell", "resource": "python3 -m unittest *", "effect": "allow" },
     { "action": "shell", "resource": "uv run pytest *", "effect": "allow" },
     { "action": "shell", "resource": "ruff check *", "effect": "allow" },
     { "action": "shell", "resource": "ruff format --check *", "effect": "allow" },
@@ -105,7 +109,9 @@
     { "action": "subagent", "resource": "*", "effect": "deny" },
     { "action": "subagent", "resource": "explore", "effect": "allow" },
     { "action": "subagent", "resource": "reviewer", "effect": "allow" },
-    { "action": "subagent", "resource": "plan-critic", "effect": "allow" }
+    { "action": "subagent", "resource": "plan-critic", "effect": "allow" },
+    { "action": "subagent", "resource": "debugger", "effect": "allow" },
+    { "action": "subagent", "resource": "consultant", "effect": "allow" }
   ],
 
   // ── Hard blocks (policies) ──────────────────────────────────────────────
@@ -134,8 +140,20 @@
     { "action": "tool.use", "resource": "shell:git push * :*", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git commit *--no-verify*", "effect": "deny" },
 
-    // Protect the review gate itself.
+    // Protect the review gate itself. Global options and environment
+    // variables can retarget any git command, which would slip past the
+    // command-name patterns above, so they're blocked outright.
     { "action": "tool.use", "resource": "shell:git -c *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git -C *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git --git-dir*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git --work-tree*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git --namespace*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git --exec-path*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*GIT_DIR=*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*GIT_WORK_TREE=*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*GIT_CONFIG*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*GIT_NOTES_REF=*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*GIT_INDEX_FILE=*", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git config *", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git config --get *", "effect": "allow" },
     { "action": "tool.use", "resource": "shell:git config --list *", "effect": "allow" },
@@ -224,6 +242,130 @@
       ]
     },
 
+    "debugger": {
+      "description": "Finds the root cause of a bug, proves it with a failing reproduction, and proposes the smallest fix at the root. Works only in scratch worktrees; never changes your tree. Give it only the 'Debug request' fields (repository, commit, bug report verbatim).",
+      "mode": "subagent",
+      "model": "github-copilot/claude-opus-5.5#xhigh",
+      "color": "#dc2626",
+      "system": "{file:./prompts/debugger.md}",
+      "permissions": [
+        { "action": "*", "resource": "*", "effect": "deny" },
+
+        { "action": "read", "resource": "*", "effect": "allow" },
+        { "action": "glob", "resource": "*", "effect": "allow" },
+        { "action": "grep", "resource": "*", "effect": "allow" },
+        { "action": "read", "resource": "*.env", "effect": "deny" },
+        { "action": "read", "resource": "*.env.*", "effect": "deny" },
+        { "action": "read", "resource": "*.env.example", "effect": "allow" },
+        { "action": "read", "resource": "*.pem", "effect": "deny" },
+        { "action": "read", "resource": "*/.ssh/*", "effect": "deny" },
+        { "action": "external_directory", "resource": "~/go/pkg/mod/*", "effect": "allow" },
+        { "action": "external_directory", "resource": "~/.config/opencode/skills/*", "effect": "allow" },
+
+        { "action": "skill", "resource": "systematic-debugging", "effect": "allow" },
+        { "action": "skill", "resource": "writing-style", "effect": "allow" },
+
+        // Scratch worktrees under /tmp/opencode/debug: the only place the
+        // debugger may write files or run its own scripts.
+        { "action": "external_directory", "resource": "/tmp/opencode/debug/*", "effect": "allow" },
+        { "action": "edit", "resource": "/tmp/opencode/debug/*", "effect": "allow" },
+        { "action": "shell", "resource": "git worktree add --detach /tmp/opencode/debug/* *", "effect": "allow" },
+        { "action": "shell", "resource": "git worktree remove --force /tmp/opencode/debug/*", "effect": "allow" },
+        { "action": "shell", "resource": "git worktree prune", "effect": "allow" },
+        { "action": "shell", "resource": "git worktree list *", "effect": "allow" },
+        { "action": "shell", "resource": "bash /tmp/opencode/debug/*", "effect": "allow" },
+        { "action": "shell", "resource": "sh /tmp/opencode/debug/*", "effect": "allow" },
+        { "action": "shell", "resource": "git worktree */..*", "effect": "deny" },
+        { "action": "shell", "resource": "bash */..*", "effect": "deny" },
+        { "action": "shell", "resource": "sh */..*", "effect": "deny" },
+        { "action": "shell", "resource": "go run *", "effect": "allow" },
+
+        { "action": "shell", "resource": "git status *", "effect": "allow" },
+        { "action": "shell", "resource": "git diff *", "effect": "allow" },
+        { "action": "shell", "resource": "git log *", "effect": "allow" },
+        { "action": "shell", "resource": "git show *", "effect": "allow" },
+        { "action": "shell", "resource": "git rev-parse *", "effect": "allow" },
+        { "action": "shell", "resource": "git merge-base *", "effect": "allow" },
+        { "action": "shell", "resource": "git blame *", "effect": "allow" },
+        { "action": "shell", "resource": "git ls-files *", "effect": "allow" },
+        { "action": "shell", "resource": "git branch --show-current", "effect": "allow" },
+        { "action": "shell", "resource": "go build *", "effect": "allow" },
+        { "action": "shell", "resource": "go test *", "effect": "allow" },
+        { "action": "shell", "resource": "go vet *", "effect": "allow" },
+        { "action": "shell", "resource": "go list *", "effect": "allow" },
+        { "action": "shell", "resource": "go doc *", "effect": "allow" },
+        { "action": "shell", "resource": "go env *", "effect": "allow" },
+        { "action": "shell", "resource": "gofmt -l *", "effect": "allow" },
+        { "action": "shell", "resource": "gofmt -d *", "effect": "allow" },
+        { "action": "shell", "resource": "pytest *", "effect": "allow" },
+        { "action": "shell", "resource": "python -m pytest *", "effect": "allow" },
+        { "action": "shell", "resource": "python3 -m pytest *", "effect": "allow" },
+        { "action": "shell", "resource": "python -m unittest *", "effect": "allow" },
+        { "action": "shell", "resource": "python3 -m unittest *", "effect": "allow" },
+        { "action": "shell", "resource": "uv run pytest *", "effect": "allow" },
+        { "action": "shell", "resource": "mvn test *", "effect": "allow" },
+        { "action": "shell", "resource": "mvn -q test *", "effect": "allow" },
+        { "action": "shell", "resource": "./mvnw test *", "effect": "allow" },
+        { "action": "shell", "resource": "gradle test *", "effect": "allow" },
+        { "action": "shell", "resource": "./gradlew test *", "effect": "allow" },
+        { "action": "shell", "resource": "make test *", "effect": "allow" },
+        { "action": "shell", "resource": "bash -n *", "effect": "allow" },
+        { "action": "shell", "resource": "sh -n *", "effect": "allow" },
+        { "action": "shell", "resource": "shellcheck *", "effect": "allow" },
+        { "action": "shell", "resource": "ls *", "effect": "allow" },
+        { "action": "shell", "resource": "wc *", "effect": "allow" }
+      ]
+    },
+
+    "consultant": {
+      "description": "Independent second opinion on a problem you're stuck on, from a different model family. Launch it after three failed fix attempts. Give it only the 'Consultation request' fields (repository, commit, problem verbatim, factual list of attempts); it returns ranked hypotheses with experiments.",
+      "mode": "subagent",
+      "model": "github-copilot/gpt-6.1-sol#xhigh",
+      "color": "#0891b2",
+      "system": "{file:./prompts/consultant.md}",
+      "permissions": [
+        { "action": "*", "resource": "*", "effect": "deny" },
+
+        { "action": "read", "resource": "*", "effect": "allow" },
+        { "action": "glob", "resource": "*", "effect": "allow" },
+        { "action": "grep", "resource": "*", "effect": "allow" },
+        { "action": "read", "resource": "*.env", "effect": "deny" },
+        { "action": "read", "resource": "*.env.*", "effect": "deny" },
+        { "action": "read", "resource": "*.env.example", "effect": "allow" },
+        { "action": "read", "resource": "*.pem", "effect": "deny" },
+        { "action": "read", "resource": "*/.ssh/*", "effect": "deny" },
+        { "action": "external_directory", "resource": "~/go/pkg/mod/*", "effect": "allow" },
+        { "action": "external_directory", "resource": "~/.config/opencode/skills/*", "effect": "allow" },
+
+        { "action": "skill", "resource": "second-opinion", "effect": "allow" },
+        { "action": "skill", "resource": "writing-style", "effect": "allow" },
+
+        { "action": "shell", "resource": "git status *", "effect": "allow" },
+        { "action": "shell", "resource": "git diff *", "effect": "allow" },
+        { "action": "shell", "resource": "git log *", "effect": "allow" },
+        { "action": "shell", "resource": "git show *", "effect": "allow" },
+        { "action": "shell", "resource": "git rev-parse *", "effect": "allow" },
+        { "action": "shell", "resource": "git blame *", "effect": "allow" },
+        { "action": "shell", "resource": "git ls-files *", "effect": "allow" },
+        { "action": "shell", "resource": "git branch --show-current", "effect": "allow" },
+        { "action": "shell", "resource": "go build *", "effect": "allow" },
+        { "action": "shell", "resource": "go test *", "effect": "allow" },
+        { "action": "shell", "resource": "go vet *", "effect": "allow" },
+        { "action": "shell", "resource": "go list *", "effect": "allow" },
+        { "action": "shell", "resource": "go doc *", "effect": "allow" },
+        { "action": "shell", "resource": "pytest *", "effect": "allow" },
+        { "action": "shell", "resource": "python -m pytest *", "effect": "allow" },
+        { "action": "shell", "resource": "python3 -m pytest *", "effect": "allow" },
+        { "action": "shell", "resource": "python -m unittest *", "effect": "allow" },
+        { "action": "shell", "resource": "python3 -m unittest *", "effect": "allow" },
+        { "action": "shell", "resource": "mvn -q test *", "effect": "allow" },
+        { "action": "shell", "resource": "./gradlew test *", "effect": "allow" },
+        { "action": "shell", "resource": "make test *", "effect": "allow" },
+        { "action": "shell", "resource": "ls *", "effect": "allow" },
+        { "action": "shell", "resource": "wc *", "effect": "allow" }
+      ]
+    },
+
     "reviewer": {
       "description": "Independent, adversarial code reviewer. Launch it to review a committed branch before any push. Give it only the 'Review request' fields (repository, branch, base, head, plan, round, previous review); it reads the diff and plan itself and records its verdict as a git note.",
       "mode": "subagent",
@@ -288,6 +430,8 @@
         { "action": "shell", "resource": "pytest *", "effect": "allow" },
         { "action": "shell", "resource": "python -m pytest *", "effect": "allow" },
         { "action": "shell", "resource": "python3 -m pytest *", "effect": "allow" },
+        { "action": "shell", "resource": "python -m unittest *", "effect": "allow" },
+        { "action": "shell", "resource": "python3 -m unittest *", "effect": "allow" },
         { "action": "shell", "resource": "uv run pytest *", "effect": "allow" },
         { "action": "shell", "resource": "ruff check *", "effect": "allow" },
         { "action": "shell", "resource": "mypy *", "effect": "allow" },

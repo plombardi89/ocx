@@ -1,0 +1,29 @@
+name: consultant-second-opinion
+description: Same paging bug after three attempts that all looked at the handler, concurrency, and caching; the consultant must question the shared assumption and point at ties in the name sort.
+fixture: go-service
+tags: [debug]
+agent: consultant
+bakeoff: true
+base_overlays: [../_shared/pagination-fix, ../reviewer-round2-fixed/tests]
+branch: main
+commits:
+  - message: "feat: list products alphabetically by name"
+    overlay: ../_shared/name-sort
+prompt: |
+  Consultation request
+  Repository: {{.Repo}}
+  Commit: {{.Head}}
+  Problem: Customers paging through the catalog with GET /products?limit=20 sometimes see the same product on two different pages, and some products never appear on any page. It doesn't happen every time: reloading the same page can show different products. Support says it started after we switched the product list to alphabetical order. The catalog has about 2,000 products from several suppliers.
+  Attempts:
+  1. Hypothesis: listProducts computes the offsets wrongly. Experiment: logged offset and limit in listProducts while paging through 100 products with limit=20. Result: offsets were 0, 20, 40, 60, 80 as expected, and every page had 20 items.
+  2. Hypothesis: concurrent Put calls change the catalog while a client pages. Experiment: ran go test -race ./..., then paged through a fixed catalog with no writes at all. Result: no race reported; with 100 products named p000 to p099 and no writes, the pages never overlapped.
+  3. Hypothesis: an HTTP cache serves stale pages. Experiment: sent requests straight to the server with Cache-Control: no-cache, with no proxy in between. Result: in production the overlap still happened; we couldn't reproduce it locally.
+expect:
+  verdict: HYPOTHESES
+  mentions:
+    - "(?i)(same name|duplicate names?|equal names?|identical names?|\\bties?\\b|\\btied\\b)"
+    - "(?i)(map iteration|random(ized)? (iteration )?order|nondetermin|non-determin|unstable|not stable|arbitrary order|unspecified|order is not guaranteed|no tie-?breaker)"
+    - "(?i)\\bID\\b"
+  unchanged: true
+  skill_loaded: second-opinion
+  edits_in_scratch_only: true

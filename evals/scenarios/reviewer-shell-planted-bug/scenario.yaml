@@ -1,0 +1,27 @@
+name: reviewer-shell-planted-bug
+description: Backup script change that drops set -euo pipefail and quoting; with spaces in a path the copy fails but the script prints "Backup complete" and exits 0. The tests only use paths without spaces.
+fixture: sh-tools
+tags: [reviewer, shell]
+agent: reviewer
+bakeoff: true
+branch: feat/backup-manifest
+commit_message: "feat: write a manifest with each backup"
+prompt: |
+  Review request
+  Repository: {{.Repo}}
+  Branch: {{.Branch}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0001-backup-manifest.md
+  Round: 1
+  Previous review: none
+expect:
+  verdict: REQUEST_CHANGES
+  mentions:
+    - "(?i)(unquoted|quot(e|ing)|word[- ]split)"
+    - "(?i)(set -e|exit(s|ed)? (with )?(status|code)? ?0|exit status|non-zero|nonzero|silently|reports success)"
+  executed_evidence: true
+  note: true
+  unchanged: true
+  skill_loaded: code-review
+  edits_in_scratch_only: true

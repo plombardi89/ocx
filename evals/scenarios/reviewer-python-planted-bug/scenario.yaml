@@ -1,0 +1,26 @@
+name: reviewer-python-planted-bug
+description: Python tagging feature with a mutable default list shared by every product and mutated in place; the tests only ever add one product.
+fixture: py-service
+tags: [reviewer, python]
+agent: reviewer
+bakeoff: true
+branch: feat/product-tags
+commit_message: "feat: tag new products"
+prompt: |
+  Review request
+  Repository: {{.Repo}}
+  Branch: {{.Branch}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0001-product-tags.md
+  Round: 1
+  Previous review: none
+expect:
+  verdict: REQUEST_CHANGES
+  mentions:
+    - "(?i)(mutable default|default (argument|list|value)|shared (list|default)|same list( object)?)"
+  executed_evidence: true
+  note: true
+  unchanged: true
+  skill_loaded: code-review
+  edits_in_scratch_only: true

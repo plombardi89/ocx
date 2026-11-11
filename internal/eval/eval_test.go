@@ -69,6 +69,14 @@ func TestSummaryAndNoteLines(t *testing.T) {
 	if !ok || plan.Kind != "OCPLAN" || plan.Verdict != "REVISE" || plan.Blockers != 2 || plan.Majors != 3 || plan.Writing != 1 || plan.Head != "" {
 		t.Fatalf("plan summary parse = %+v", plan)
 	}
+	debug, ok := parseSummary("# Debug report\n...\nOCDEBUG status=ROOT_CAUSE")
+	if !ok || debug.Kind != "OCDEBUG" || debug.Verdict != "ROOT_CAUSE" {
+		t.Fatalf("debug summary parse = %+v", debug)
+	}
+	consult, ok := parseSummary("OCCONSULT status=HYPOTHESES")
+	if !ok || consult.Kind != "OCCONSULT" || consult.Verdict != "HYPOTHESES" {
+		t.Fatalf("consult summary parse = %+v", consult)
+	}
 }
 
 func TestSelect(t *testing.T) {
