@@ -77,7 +77,15 @@ Plans, decision records, and pull requests may link to code. Code never links ba
 
 ## 3. Plain English
 
-Use the simplest words that are still accurate. A technical term is fine when the reader needs it; explain it the first time it appears. Spell out abbreviations on first use, for example "time to live (TTL)".
+Use the simplest words that are still accurate. A technical term is fine when the reader needs it; explain it the first time it appears.
+
+Spell out an abbreviation on first use, for example "time to live (TTL)", unless a developer would know it without looking it up:
+
+| Leave as is | Spell out on first use |
+| --- | --- |
+| HTTP, URL, JSON, API, ID, SQL, CPU, US, UTC | TTL, RBAC, SLO, CQRS, project-specific abbreviations |
+
+Flagging a common abbreviation is not a WRITING finding.
 
 | Instead of | Write |
 | --- | --- |

@@ -1,0 +1,18 @@
+name: critic-good-plan
+description: Complete, checkable plan for splitting an amount into installments; the critic should approve it without inventing gaps or questions.
+fixture: go-service
+tags: [critic]
+agent: plan-critic
+bakeoff: true
+branch: feat/split-amounts
+commit_message: "docs: plan splitting amounts into installments"
+prompt: |
+  Plan review request
+  Repository: {{.Repo}}
+  Plan: docs/plans/0008-split-amounts.md
+  Round: 1
+expect:
+  verdict: APPROVE
+  unchanged: true
+  skill_loaded: plan-critique
+  edits_in_scratch_only: true

@@ -1,0 +1,23 @@
+name: critic-vague-plan
+description: Product search plan whose criteria can't be checked ("fast", "gracefully", "relevant") and whose matching rule is undefined; the critic must ask for revisions.
+fixture: go-service
+tags: [critic]
+agent: plan-critic
+bakeoff: true
+branch: feat/product-search
+commit_message: "docs: plan product search"
+prompt: |
+  Plan review request
+  Repository: {{.Repo}}
+  Plan: docs/plans/0006-product-search.md
+  Round: 1
+expect:
+  verdict: REVISE
+  min_blockers: 1
+  mentions:
+    - "(?i)\\b(fast|large catalogs?)\\b"
+    - "(?i)(gracefully|bad input)"
+    - "(?i)(case[- ]insensitive|case[- ]sensitiv|substring|prefix|exact match|partial match|what counts as a match|matching rule)"
+  unchanged: true
+  skill_loaded: plan-critique
+  edits_in_scratch_only: true

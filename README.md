@@ -1,13 +1,25 @@
 # ocx
 
-OpenCode agents, skills, and commands for building complex software, with an **independent, adversarial review gate**: every push needs an approving review, from a reviewer on a different model family, of the exact commit being pushed.
+OpenCode agents, skills, and commands for building complex software, with **independent, adversarial checks at both ends**: a plan critic before any code is written, and a review gate before anything is pushed. Both run on a different model family from the agent writing the code.
 
 ## How it works
 
 ```
-you ──▶ build (Claude Opus, built-in prompt)
-          │  loads skills: git-workflow, writing-plans, requesting-review
-          │  works on feat/… or fix/… branches, commits
+you ──▶ /plan <the work>
+          │
+          ▼
+        build (Claude Opus, built-in prompt)
+          │  asks you the requirements questions, with suggested defaults
+          │  drafts docs/plans/NNNN-<slug>.md
+          ▼
+        plan-critic subagent (GPT-6 Astra, fresh context, read-only)
+          │  gets only: repository, plan, round
+          │  checks every criterion can be verified, attacks it for missing
+          │  edge cases, checks the plan against the actual code
+          │  returns APPROVE or REVISE, plus questions for you
+          ▼
+        you approve the plan ──▶ build implements on feat/… or fix/… branches
+          │
           ▼
         reviewer subagent (GPT-6.1 Sol, fresh context, cannot touch your tree)
           │  gets only: repository, branch, base, head, plan, round
@@ -24,7 +36,8 @@ Independence comes from the setup, not from asking nicely:
 
 | Weak point | How it's closed |
 | --- | --- |
-| Author frames the review ("tests pass, just check style") | `requesting-review` gives a fixed template; the reviewer treats anything extra as an unverified claim, lists it in its report, and checks it by running code where it can |
+| Plans that can't be checked | The plan critic rejects vague criteria ("fast", "gracefully") and undefined edge cases before any code exists; you approve the written criteria |
+| Author frames the review ("tests pass, just check style") | `requesting-review` and `writing-plans` give fixed request templates; the reviewer and critic treat anything extra as an unverified claim |
 | Shared blind spots | Reviewer is pinned to a different model family than the driver |
 | Findings argued away | Findings carry executed evidence where feasible: a `review_` harness that fails, with its code in the report |
 | Author drops inconvenient findings | Findings are fixed or disputed to Phil, never dropped; 3-round cap, then escalate |
@@ -39,7 +52,7 @@ Every agent follows four rules for anything people read: code comments, docs, pl
 
 1. Code comments are short and explain why, not how. TODOs must stand on their own and go to Phil, who decides whether to fix or remove them; they block merging until he does.
 2. Code comments stand on their own: no references to plans, reviews, tickets, or requests. Tests are named for the behavior they protect.
-3. Plain English: simple accurate words, technical terms explained on first use, numbered lists or diagrams for steps (plain text in code, Mermaid allowed in docs).
+3. Plain English: simple accurate words, technical terms and uncommon abbreviations explained on first use, numbered lists or diagrams for steps (plain text in code, Mermaid allowed in docs).
 4. Lists with a natural order are numbered 1, 2, 3, through the last item, most important first; nested lists too. Bullets only when there is no order.
 
 The reviewer enforces these with a separate finding category:
@@ -69,8 +82,10 @@ The reviewer may write and run code to prove a point, but only in a detached scr
 config/opencode.jsonc     agents, models, baseline permissions, policies (single source of truth)
 config/global-AGENTS.md   global working agreements and writing rules (becomes ~/.config/opencode/AGENTS.md)
 config/prompts/           agent system prompts, referenced with {file:./prompts/…}
-skills/                   code-review, requesting-review, git-workflow, writing-plans, writing-style
-commands/review.md        /review: run the reviewer on the current branch yourself
+skills/                   code-review, plan-critique, requesting-review, git-workflow, writing-plans, writing-style
+commands/                 /plan: plan work with a critique and your approval
+                          /critique-plan <file>: run the plan critic yourself
+                          /review: run the reviewer on the current branch yourself
 hooks/pre-push            the review gate
 templates/AGENTS.md       starting point for a project's AGENTS.md
 tests/permissions.yaml    permission probes: "agent X doing Y must be allow/ask/deny"
@@ -85,8 +100,9 @@ cmd/ocx, internal/        Go tooling behind the Makefile
 | `make check` | gofmt, vet, Go tests (incl. hook tests), config/skill/command lint, writing-rule lint, 103 permission probes against OpenCode's resolved config | free, ~seconds |
 | `make check-offline` | Same without running OpenCode | free |
 | `make eval-reviewer` | Reviewer scenarios with the pinned reviewer model | tokens |
-| `make eval-e2e` | build implements → requests review → pushes through the gate | tokens |
-| `make bakeoff` | Reviewer scenarios × `BAKEOFF_MODELS` × `REPS` | tokens |
+| `make eval-critic` | Plan-critic scenarios, plus the end-to-end planning run | tokens |
+| `make eval-e2e` | End-to-end runs: planning flow, and implement → review → push through the gate | tokens |
+| `make bakeoff` | One tag's comparison scenarios × `BAKEOFF_MODELS` × `REPS` (`TAG=reviewer` or `TAG=critic`) | tokens |
 | `make verify` | `check` + every eval: the single "is everything good?" entrypoint | tokens |
 | `make sandbox` | Throwaway copy of the fixture with this config staged; opens OpenCode in it (`SCENARIO=reviewer-planted-bug` to start on a review branch) | — |
 | `make hook-install REPO=…` | Install the review gate into a repository | — |
@@ -103,7 +119,11 @@ Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run even
 | `reviewer-round2-missing-test` | Round 2: correct fixes, no regression tests: request them |
 | `reviewer-round2-weak-test` | Round 2: "regression tests" that also pass on the round-1 commit: catch it by running them there |
 | `reviewer-writing-rules` | Correct, tested code whose comments, test name, and doc break the writing rules: WRITING findings, and the one valid TODO listed for Phil |
+| `critic-vague-plan` | Plan with uncheckable criteria ("fast", "gracefully") and an undefined matching rule: REVISE |
+| `critic-missing-edge-cases` | Concrete plan whose own goal needs insufficient-stock, concurrency, and quantity rules it never states: REVISE |
+| `critic-good-plan` | Complete, checkable plan: APPROVE with no invented gaps or questions |
 | `e2e-review-gate` | build implements, requests review with the bare template, pushes only the approved commit; its added comments must stand on their own |
+| `e2e-plan-flow` | build plans a feature, asks the critic with the bare template, revises, and writes no code |
 
 Scenarios can stack several commits on a branch and seed earlier review notes (`commits:` with `overlays:` and `note:`); shared material lives in `evals/scenarios/_shared/`.
 
@@ -115,9 +135,10 @@ All models are set in `config/opencode.jsonc`. MAI models are never used; `make 
 | --- | --- | --- |
 | Driver (`build`, session default) | `claude-opus-5.5` | Strongest on repository-scale coding (SWE-bench Pro 89.9%, FrontierCode, AA Intelligence Index 58) |
 | `reviewer` | `gpt-6.1-sol#xhigh` | Different family from the driver; won our model comparison (below) |
+| `plan-critic` | `gpt-6-astra#high` | Different family from the driver, and a different model from the reviewer; tied for best in our model comparison (below) |
 | `explore` | `claude-haiku-5.5` | Matches Opus on code-search recall, much faster |
 
-Planned for later slices: `debugger` (Opus xhigh), `test-writer` (Sonnet 5.5 xhigh), `plan-critic` and `security-reviewer` (GPT-6 Astra high), `consultant` (Sol xhigh), `lead`/`implementer`.
+Planned for later slices: `debugger` (Opus xhigh), `test-writer` (Sonnet 5.5 xhigh), `security-reviewer` (GPT-6 Astra high), `consultant` (Sol xhigh), `lead`/`implementer`.
 
 ### Reviewer model comparison
 
@@ -128,9 +149,19 @@ Planned for later slices: `debugger` (Opus xhigh), `test-writer` (Sonnet 5.5 xhi
 
 Sol stays the reviewer: it tied Astra on quality, and it is a different family from the Opus driver.
 
+### Plan-critic model comparison
+
+`make bakeoff TAG=critic` ran the 3 critic scenarios 3 times each on 3 models (27 runs, 2026-11-11). All 27 passed, so the finer signals decided:
+
+1. **GPT-6 Astra (high)** found the most dangerous gap in the stock-reservation plan, that a negative quantity would *increase* stock, in 3 of 3 runs. It added one MINOR finding to the good plan in 2 of 3 runs.
+2. **GPT-6.1 Sol (xhigh)** found that gap in 2 of 3 runs, and made no findings at all on the good plan.
+3. **Claude Opus 5.5 (high)** was about 3 times faster but found that gap in only 1 of 3 runs, added 2 MINOR findings to the good plan every time, and is the same family as the driver.
+
+Astra stays the critic: it ties Sol on quality, and using a different model at each gate makes a blind spot shared by the plan critic and the reviewer less likely.
+
 ## Permissions model
 
-- **Baseline (all agents):** shell asks by default; read-only git and build/test/lint commands are pre-approved; committing and pushing are denied (build re-allows them); review notes are read-only; `.env`/keys denied; `.git/` uneditable; outside directories ask; only `explore` and `reviewer` can be launched as subagents.
+- **Baseline (all agents):** shell asks by default; read-only git and build/test/lint commands are pre-approved; committing and pushing are denied (build re-allows them); review notes are read-only; `.env`/keys denied; `.git/` uneditable; outside directories ask; only `explore`, `plan-critic`, and `reviewer` can be launched as subagents.
 - **Custom agents** start with a deny-all rule and allowlist what they need. `make check` enforces this; that they write files only under `/tmp/opencode/reviews/`; and that their shell allowlists stay within the read-only baseline. The reviewer's exceptions are its verdict note, scratch worktrees (`git worktree add --detach|remove --force` under the scratch root, path traversal denied), `go run`, and scripts inside its scratch worktree.
 - **Policies** hard-deny what must never happen regardless of approvals: pushes to main/master, force pushes, `--no-verify`, ref deletion, `git -c`, `git config` writes, `git update-ref`, touching hooks, `gh pr merge|review|ready`, `gh api`, `sudo`, publishing.
 

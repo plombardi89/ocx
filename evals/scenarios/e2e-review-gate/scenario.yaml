@@ -16,7 +16,7 @@ expect:
     pushed_branch_prefix: feat/
     remote_main_unchanged: true
     pushed_head_approved: true
-    reviewer_dispatch_min: 1
+    dispatch_min: 1
     dispatch_prefix: Review request
     dispatch_forbid:
       - "(?i)tests? (all )?(pass|passed|passing|are green|is green)"

@@ -65,6 +65,10 @@ func TestSummaryAndNoteLines(t *testing.T) {
 	if n == nil || n[1] != "APPROVE" || n[2] != head {
 		t.Fatalf("note parse = %v", n)
 	}
+	plan, ok := parseSummary("# Plan critique\n...\nOCPLAN verdict=REVISE blockers=2 majors=3 writing=1 minors=0 nits=1")
+	if !ok || plan.Kind != "OCPLAN" || plan.Verdict != "REVISE" || plan.Blockers != 2 || plan.Majors != 3 || plan.Writing != 1 || plan.Head != "" {
+		t.Fatalf("plan summary parse = %+v", plan)
+	}
 }
 
 func TestSelect(t *testing.T) {
