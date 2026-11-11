@@ -41,3 +41,4 @@ OpenCode agents, skills, and commands, plus the Go tool `ocx` that checks, evalu
 - A failing eval keeps its workspace under `/tmp/opencode/ocx-eval/` for inspection; passing ones are removed.
 - The pre-push hook in this repository rejects any commit the reviewer hasn't approved. `make review` reviews only committed changes.
 - `main` only accepts pull requests whose `check` status passes.
+- A Go test that runs OpenCode must skip unless `OCX_TEST_OPENCODE=1`, which `make check` sets. `make check-offline` points `OCX_OPENCODE` at `false`, so any test that runs OpenCode anyway fails there and in CI.

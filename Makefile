@@ -11,9 +11,12 @@ REPS ?= 3
 help: ## Show targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
 
+check: export OCX_TEST_OPENCODE = 1
 check: test fixtures-test ## Fast, free checks: Go tests, fixture tests, config lint, permission probes against resolved OpenCode config
 	$(OCX) check
 
+# Pointing ocx at false makes anything that still runs opencode fail.
+check-offline: export OCX_OPENCODE = false
 check-offline: test fixtures-test ## Like check, but without running opencode (what CI runs)
 	$(OCX) check --offline
 

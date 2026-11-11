@@ -177,8 +177,8 @@ func TestOfflineDoctorDoesNotContactGitHub(t *testing.T) {
 }
 
 func TestDoctorFailsWhenAnotherFileSetsPolicies(t *testing.T) {
-	if _, err := exec.LookPath("opencode"); err != nil && os.Getenv("OCX_OPENCODE") == "" {
-		t.Skip("needs opencode")
+	if os.Getenv("OCX_TEST_OPENCODE") != "1" {
+		t.Skip("runs opencode; set OCX_TEST_OPENCODE=1, as make check does")
 	}
 	root, dir := repoRoot(t), filepath.Join(t.TempDir(), "opencode")
 	p, err := install.PlanInstall(root, dir, false)
