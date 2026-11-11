@@ -134,8 +134,20 @@
     { "action": "tool.use", "resource": "shell:git push * :*", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git commit *--no-verify*", "effect": "deny" },
 
-    // Protect the review gate itself.
+    // Protect the review gate itself. Global options and environment
+    // variables can retarget any git command, which would slip past the
+    // command-name patterns above, so they're blocked outright.
     { "action": "tool.use", "resource": "shell:git -c *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git -C *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git --git-dir*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git --work-tree*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git --namespace*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git --exec-path*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*GIT_DIR=*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*GIT_WORK_TREE=*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*GIT_CONFIG*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*GIT_NOTES_REF=*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*GIT_INDEX_FILE=*", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git config *", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git config --get *", "effect": "allow" },
     { "action": "tool.use", "resource": "shell:git config --list *", "effect": "allow" },

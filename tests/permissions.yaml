@@ -109,6 +109,16 @@ probes:
   - { agent: build, action: shell, resource: "git notes --ref=ocreview add -f -m forged HEAD", expect: deny }
   - { agent: build, action: shell, resource: "git notes --ref=ocreview show HEAD", expect: allow }
   - { agent: build, action: shell, resource: "git -c core.hooksPath=/dev/null push origin feat/x", expect: deny }
+  - { agent: build, action: shell, resource: "git -C . push origin main", expect: deny }
+  - { agent: build, action: shell, resource: "git -C . notes --ref=ocreview add -f -m forged HEAD", expect: deny }
+  - { agent: build, action: shell, resource: "git -C . config core.hooksPath /dev/null", expect: deny }
+  - { agent: build, action: shell, resource: "git --git-dir=.git push origin main", expect: deny }
+  - { agent: build, action: shell, resource: "git --work-tree=. --git-dir=.git notes add -m x HEAD", expect: deny }
+  - { agent: build, action: shell, resource: "GIT_DIR=.git git push origin main", expect: deny }
+  - { agent: build, action: shell, resource: "env GIT_CONFIG_GLOBAL=/dev/null git push origin feat/x", expect: deny }
+  - { agent: build, action: shell, resource: "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git push origin feat/x", expect: deny }
+  - { agent: build, action: shell, resource: "GIT_NOTES_REF=refs/notes/ocreview git notes add -m x HEAD", expect: deny }
+  - { agent: build, action: shell, resource: "git --no-pager log --oneline", expect: ask }
   - { agent: build, action: shell, resource: "git config core.hooksPath /dev/null", expect: deny }
   - { agent: build, action: shell, resource: "git config --get user.email", expect: ask }
   - { agent: build, action: shell, resource: "git update-ref refs/notes/ocreview abc", expect: deny }
