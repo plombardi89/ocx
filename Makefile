@@ -6,21 +6,26 @@ TAG ?= reviewer
 BAKEOFF_MODELS ?= github-copilot/gpt-6.1-sol\#xhigh,github-copilot/gpt-6-astra\#high,github-copilot/claude-opus-5.5\#high
 REPS ?= 3
 
-.PHONY: help check check-offline test eval eval-reviewer eval-critic eval-debug eval-e2e bakeoff verify sandbox hook-install install uninstall doctor fmt
+.PHONY: help check check-offline test fixtures-test eval eval-reviewer eval-critic eval-debug eval-e2e bakeoff verify sandbox hook-install install uninstall doctor review fmt
 
 help: ## Show targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
 
-check: test ## Fast, free checks: Go tests, config lint, permission probes against resolved OpenCode config
+check: test fixtures-test ## Fast, free checks: Go tests, fixture tests, config lint, permission probes against resolved OpenCode config
 	$(OCX) check
 
-check-offline: test ## Like check, but without running opencode
+check-offline: test fixtures-test ## Like check, but without running opencode (what CI runs)
 	$(OCX) check --offline
 
 test: ## Go vet and unit tests (includes pre-push hook tests)
 	@test -z "$$(gofmt -l cmd internal)" || { echo "gofmt needed:"; gofmt -l cmd internal; exit 1; }
 	go vet ./...
 	go test ./...
+
+fixtures-test: ## Run the eval fixtures' own tests; scenarios assume the unchanged fixtures pass
+	cd evals/fixtures/go-service && go test ./...
+	PYTHONDONTWRITEBYTECODE=1 $(MAKE) -s -C evals/fixtures/py-service test
+	$(MAKE) -s -C evals/fixtures/sh-tools test
 
 eval: ## Run every eval scenario (uses model tokens; ARGS="..." passes flags to ocx eval)
 	$(OCX) eval $(ARGS)
@@ -34,7 +39,7 @@ eval-critic: ## Run the plan-critic scenarios, including the end-to-end planning
 eval-debug: ## Run the debugger and consultant scenarios, including the end-to-end debugging run
 	$(OCX) eval --tag debug $(ARGS)
 
-eval-e2e: ## Run the end-to-end scenarios (review gate and planning flow)
+eval-e2e: ## Run the end-to-end scenarios (planning, debugging, and the review gate)
 	$(OCX) eval --tag e2e $(ARGS)
 
 bakeoff: ## Compare models on one tag's scenarios: TAG=reviewer|critic|debug BAKEOFF_MODELS=... REPS=...
@@ -54,6 +59,9 @@ install: ## Link agents, skills, and commands into ~/.config/opencode (dry run; 
 
 uninstall: ## Remove the global install and restore its backups (dry run; APPLY=1 to change)
 	$(OCX) uninstall $(if $(APPLY),--apply)
+
+review: ## Run the reviewer on REPO's current commit (default: this repo). PLAN=, ROUND=, PREVIOUS= for later rounds
+	$(OCX) review --repo $(or $(REPO),.) $(if $(PLAN),--plan $(PLAN)) $(if $(ROUND),--round $(ROUND)) $(if $(PREVIOUS),--previous $(PREVIOUS))
 
 doctor: ## Check the install, OpenCode, tools, and each of REPOS="path ..." (gate, AGENTS.md, branch protection)
 	$(OCX) doctor $(REPOS)

@@ -94,6 +94,7 @@ templates/AGENTS.md       starting point for a project's AGENTS.md
 tests/permissions.yaml    permission probes: "agent X doing Y must be allow/ask/deny"
 evals/                    fixture project, scenarios, and results (results are gitignored)
 AGENTS.md                 instructions for agents working on this repository
+.github/workflows/        CI: make check-offline on every pull request and push to main
 cmd/ocx, internal/        Go tooling behind the Makefile
 ```
 
@@ -101,8 +102,9 @@ cmd/ocx, internal/        Go tooling behind the Makefile
 
 | Target | What it does | Cost |
 | --- | --- | --- |
-| `make check` | gofmt, vet, Go tests (incl. hook tests), config/skill/command lint, writing-rule lint, 103 permission probes against OpenCode's resolved config | free, ~seconds |
-| `make check-offline` | Same without running OpenCode | free |
+| `make check` | gofmt, vet, Go tests (incl. hook tests), the fixtures' own tests, config/skill/command lint, writing-rule lint, permission probes against OpenCode's resolved config | free, ~seconds |
+| `make check-offline` | Same without running OpenCode; CI runs this on every pull request | free |
+| `make fixtures-test` | The eval fixtures' own tests, which every scenario assumes pass before it adds its changes | free |
 | `make eval-reviewer` | Reviewer scenarios with the pinned reviewer model | tokens |
 | `make eval-critic` | Plan-critic scenarios, plus the end-to-end planning run | tokens |
 | `make eval-debug` | Debugger and consultant scenarios, plus the end-to-end debugging run | tokens |
@@ -111,6 +113,7 @@ cmd/ocx, internal/        Go tooling behind the Makefile
 | `make verify` | `check` + every eval: the single "is everything good?" entrypoint | tokens |
 | `make sandbox` | Throwaway copy of the fixture with this config staged; opens OpenCode in it (`SCENARIO=reviewer-planted-bug` to start on a review branch) | — |
 | `make hook-install REPO=…` | Install the review gate into a repository | — |
+| `make review [REPO=…]` | Run the reviewer on a repository's current commit without installing anything (`ROUND=`, `PREVIOUS=`, `PLAN=` for later rounds) | tokens |
 | `make install` / `make uninstall` | Show, or with `APPLY=1` make, the global install or its removal | — |
 | `make doctor REPOS="…"` | Check the install, what OpenCode loads, tools, and each repository's gate, `AGENTS.md`, and branch protection | free |
 
@@ -217,9 +220,21 @@ Astra stays the critic: it ties Sol on quality, and using a different model at e
 3. The tools agents rely on: a working `gh` login, `gcc` for the race detector, `shellcheck`, and a git credential helper that can actually run.
 4. For each repository: the pre-push hook is installed and current, there's an `AGENTS.md`, and GitHub protects the default branch.
 
+### Reviewing without installing
+
+`make review REPO=/path/to/project` runs the reviewer on the project's current commit. It checks the commit out into a temporary worktree under `/tmp/opencode/ocx-review/`, stages this configuration there, and runs the reviewer headlessly. The project needs no `.opencode/` directory or install. Worktrees share git notes, so the verdict lands where the pre-push hook looks for it. Uncommitted changes aren't reviewed. It exits 0 only on approval; otherwise fix the findings, commit, and run the next round with the `ROUND=` and `PREVIOUS=` values it prints.
+
 ### Bypassing the gate yourself
 
 `git push --no-verify` from your own terminal skips the local hook. Agents can't do that, and GitHub's rules still apply.
+
+## Changes to ocx itself
+
+ocx goes through its own gate:
+
+1. The pre-push hook is installed in this repository, so a commit is pushed only after the reviewer approves it. Until the global install, run the reviewer with `make review`.
+2. CI runs `make check-offline` on every pull request and every push to `main`. It skips the checks that start OpenCode; run `make check` locally for those.
+3. The "Protect main" ruleset requires a pull request and the `check` status to pass before anything merges into `main`.
 
 ## Conventions for adding to this repo
 

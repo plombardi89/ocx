@@ -17,6 +17,7 @@ import (
 	"github.com/plombardi89/ocx/internal/eval"
 	"github.com/plombardi89/ocx/internal/hook"
 	"github.com/plombardi89/ocx/internal/install"
+	"github.com/plombardi89/ocx/internal/review"
 	"github.com/plombardi89/ocx/internal/stage"
 )
 
@@ -31,6 +32,7 @@ Usage:
   ocx install [--apply] [--force]       link the agents, skills, and commands into OpenCode's global config
   ocx uninstall [--apply]               remove those links and restore what install backed up
   ocx doctor [--offline] [REPO...]      check the install, OpenCode, tools, and each repo's gate and branch protection
+  ocx review [--repo DIR] [flags]       run the independent reviewer on a repo's current commit; exits 0 only on approval
 
 Run "ocx <command> -h" for flags.
 `
@@ -62,6 +64,8 @@ func main() {
 		err = runUninstall(args)
 	case "doctor":
 		err = runDoctor(root, args)
+	case "review":
+		err = runReview(root, args)
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
@@ -334,4 +338,44 @@ func runDoctor(root string, args []string) error {
 		repos = append(repos, abs)
 	}
 	return printResults(doctor.Run(doctor.Options{Root: root, ConfigDir: dir, Repos: repos, Offline: *offline}))
+}
+
+func runReview(root string, args []string) error {
+	fs := flag.NewFlagSet("review", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository whose current commit to review")
+	plan := fs.String("plan", "", "plan file, relative to the repository")
+	round := fs.Int("round", 1, "review round")
+	previous := fs.String("previous", "", "full sha of the head reviewed in the previous round")
+	model := fs.String("model", "", "override the reviewer's pinned model")
+	_ = fs.Parse(args)
+
+	abs, err := filepath.Abs(*repo)
+	if err != nil {
+		return err
+	}
+	o, err := review.Run(review.Options{
+		Root: root, Repo: abs, Plan: *plan, Round: *round, PreviousReview: *previous, Model: *model,
+		Log: func(format string, a ...any) { fmt.Fprintf(os.Stderr, "ocx: "+format+"\n", a...) },
+	})
+	if o != nil && o.Report != "" {
+		fmt.Println(o.Report)
+	}
+	if err != nil {
+		if o != nil && o.EventsPath != "" {
+			fmt.Fprintf(os.Stderr, "ocx: events: %s\n", o.EventsPath)
+		}
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "\nocx: reviewed %s in %s; note: %s\n", o.Head[:7], o.Duration.Round(time.Second), o.NoteFirstLine)
+	if !o.Approved() {
+		next := fmt.Sprintf("make review ROUND=%d PREVIOUS=%s", *round+1, o.Head)
+		if abs != root {
+			next += " REPO=" + abs
+		}
+		if *plan != "" {
+			next += " PLAN=" + *plan
+		}
+		return fmt.Errorf("not approved (%s); fix the findings, commit, and run the next round: %s", o.Verdict, next)
+	}
+	return nil
 }
