@@ -1,0 +1,75 @@
+#!/bin/sh
+# ocagents-managed-hook: pre-push review gate.
+#
+# Rejects any push that would update main or master, and any push of a commit
+# that has no approving independent review. The reviewer agent records its
+# verdict as a git note on the reviewed commit (refs/notes/ocreview). The
+# first line of an approving note looks like:
+#
+#   ocreview: verdict=APPROVE spec=PASS quality=PASS base=<sha> head=<sha>
+#
+# Installed by `ocx hook install <repo>`. A pre-existing pre-push hook is kept
+# as pre-push.local and runs after these checks pass. Humans can bypass the
+# gate with `git push --no-verify`; agents are blocked from doing so.
+
+notes_ref=refs/notes/ocreview
+input=$(cat)
+status=0
+
+fail() {
+	printf 'ocagents: %s\n' "$1" >&2
+	status=1
+}
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+	[ -n "$local_ref" ] || continue
+
+	case "$remote_ref" in
+	refs/heads/main | refs/heads/master)
+		fail "pushing to ${remote_ref#refs/heads/} is not allowed. Push a feature branch (feat/<slug>, fix/<slug>) and open a pull request."
+		continue
+		;;
+	refs/notes/*)
+		continue
+		;;
+	esac
+
+	case "$local_sha" in
+	*[!0]*) ;;
+	*) continue ;; # deleting a remote ref; main/master were rejected above
+	esac
+
+	commit=$(git rev-parse --verify --quiet "${local_sha}^{commit}") || {
+		fail "cannot resolve ${local_sha} to a commit."
+		continue
+	}
+
+	first=$(git notes --ref="$notes_ref" show "$commit" 2>/dev/null | head -n 1)
+	case "$first" in
+	"ocreview: verdict=APPROVE "*) ;;
+	"ocreview: verdict="*)
+		fail "commit ${commit} was reviewed but not approved (${first#ocreview: }). Address the findings and request a new review."
+		continue
+		;;
+	*)
+		fail "commit ${commit} (${local_ref#refs/heads/}) has no review. Request a review from the reviewer agent before pushing."
+		continue
+		;;
+	esac
+
+	approved_head=$(printf '%s\n' "$first" | sed -n 's/.* head=\([0-9a-f]*\).*/\1/p')
+	if [ "$approved_head" != "$commit" ]; then
+		fail "the approval on ${commit} names head=${approved_head:-<missing>}; the note must approve this exact commit."
+	fi
+done <<EOF
+$input
+EOF
+
+if [ "$status" -eq 0 ]; then
+	local_hook="$(dirname "$0")/pre-push.local"
+	if [ -x "$local_hook" ]; then
+		printf '%s\n' "$input" | "$local_hook" "$@" || status=$?
+	fi
+fi
+
+exit "$status"

@@ -1,0 +1,117 @@
+# Permission probes for `ocx check`.
+#
+# Each probe asks: if this agent attempted this action on this resource, what
+# would OpenCode decide? Rules come from `opencode debug agents` (fully
+# resolved: defaults, baseline, agent rules) and policies from
+# config/opencode.jsonc. expect is allow, ask, or deny.
+probes:
+  # reviewer: read-only, plus its verdict note
+  - { agent: reviewer, action: read, resource: internal/store/store.go, expect: allow }
+  - { agent: reviewer, action: read, resource: .env, expect: deny }
+  - { agent: reviewer, action: read, resource: config/prod.env, expect: deny }
+  - { agent: reviewer, action: edit, resource: internal/store/store.go, expect: deny }
+  - { agent: reviewer, action: edit, resource: docs/plans/0001-x.md, expect: deny }
+  - { agent: reviewer, action: shell, resource: "git diff -U10 abc..def", expect: allow }
+  - { agent: reviewer, action: shell, resource: "go test -race ./...", expect: allow }
+  - { agent: reviewer, action: shell, resource: "git notes --ref=ocreview show 0123abc", expect: allow }
+  - { agent: reviewer, action: shell, resource: "git notes --ref=ocreview add -f -F - 0123abc <<'OCREVIEW_NOTE_END'\nocreview: verdict=APPROVE\nOCREVIEW_NOTE_END", expect: allow }
+  - { agent: reviewer, action: shell, resource: "git notes --ref=other add -m x HEAD", expect: deny }
+  - { agent: reviewer, action: shell, resource: "git commit -m x", expect: deny }
+  - { agent: reviewer, action: shell, resource: "git push -u origin feat/x", expect: deny }
+  - { agent: reviewer, action: shell, resource: "git checkout -- .", expect: deny }
+  - { agent: reviewer, action: shell, resource: "rm -rf build", expect: deny }
+  - { agent: reviewer, action: shell, resource: "curl https://example.com", expect: deny }
+  - { agent: reviewer, action: subagent, resource: general, expect: deny }
+  - { agent: reviewer, action: subagent, resource: reviewer, expect: deny }
+  - { agent: reviewer, action: webfetch, resource: "https://example.com", expect: deny }
+  - { agent: reviewer, action: websearch, resource: "anything", expect: deny }
+  - { agent: reviewer, action: question, resource: "*", expect: deny }
+  - { agent: reviewer, action: skill, resource: code-review, expect: allow }
+  - { agent: reviewer, action: skill, resource: writing-style, expect: allow }
+  - { agent: reviewer, action: skill, resource: git-workflow, expect: deny }
+  - { agent: reviewer, action: external_directory, resource: "/etc/*", expect: deny }
+
+  # reviewer harnesses: write and run only inside scratch worktrees
+  - { agent: reviewer, action: external_directory, resource: "/tmp/opencode/reviews/shop-306ddb2-kqvx/*", expect: allow }
+  - { agent: reviewer, action: external_directory, resource: "/tmp/opencode/other/*", expect: deny }
+  - { agent: reviewer, action: edit, resource: /tmp/opencode/reviews/shop-306ddb2-kqvx/internal/store/review_list_test.go, expect: allow }
+  - { agent: reviewer, action: edit, resource: /tmp/opencode/reviews/shop-306ddb2-kqvx/internal/store/store.go, expect: allow }
+  - { agent: reviewer, action: edit, resource: /tmp/opencode/other/x.go, expect: deny }
+  - { agent: reviewer, action: edit, resource: /home/phil/work/shop/internal/store/store.go, expect: deny }
+  - { agent: reviewer, action: edit, resource: /tmp/opencode/reviews/shop-306ddb2-kqvx/.git/config, expect: deny }
+  - { agent: reviewer, action: shell, resource: "git worktree add --detach /tmp/opencode/reviews/shop-306ddb2-kqvx 306ddb241b8e58eb3a28dc05a322d522fe8adc75", expect: allow }
+  - { agent: reviewer, action: shell, resource: "git worktree add --detach /tmp/opencode/reviews/../../home/phil/x HEAD", expect: deny }
+  - { agent: reviewer, action: shell, resource: "git worktree add ../elsewhere HEAD", expect: deny }
+  - { agent: reviewer, action: shell, resource: "git worktree add --detach /tmp/opencode/other HEAD", expect: deny }
+  - { agent: reviewer, action: shell, resource: "git worktree add -b review /tmp/opencode/reviews/x HEAD", expect: deny }
+  - { agent: reviewer, action: shell, resource: "git worktree remove --force /tmp/opencode/reviews/shop-306ddb2-kqvx", expect: allow }
+  - { agent: reviewer, action: shell, resource: "git worktree remove --force /home/phil/work/shop", expect: deny }
+  - { agent: reviewer, action: shell, resource: "git worktree list", expect: allow }
+  - { agent: reviewer, action: shell, resource: "git worktree prune", expect: allow }
+  - { agent: reviewer, action: shell, resource: "bash /tmp/opencode/reviews/shop-306ddb2-kqvx/review_cli.sh", expect: allow }
+  - { agent: reviewer, action: shell, resource: "bash /tmp/opencode/reviews/x/../../../home/phil/deploy.sh", expect: deny }
+  - { agent: reviewer, action: shell, resource: "bash ./scripts/deploy.sh", expect: deny }
+  - { agent: reviewer, action: shell, resource: "sh /tmp/opencode/reviews/shop-306ddb2-kqvx/review_cli.sh", expect: allow }
+  - { agent: reviewer, action: shell, resource: "go run ./review_probe", expect: allow }
+  - { agent: reviewer, action: shell, resource: "go test -run '^$' -fuzz FuzzReviewParse -fuzztime 30s ./internal/money/", expect: allow }
+  - { agent: reviewer, action: shell, resource: "rm -rf /tmp/opencode/reviews/shop-306ddb2-kqvx", expect: deny }
+  - { agent: reviewer, action: shell, resource: "git checkout -- internal/store/store.go", expect: deny }
+  - { agent: reviewer, action: shell, resource: "git switch -c review", expect: deny }
+
+  # build: implements, commits, pushes feature branches; never main, never notes
+  - { agent: build, action: edit, resource: internal/store/store.go, expect: allow }
+  - { agent: build, action: edit, resource: .git/hooks/pre-push, expect: deny }
+  - { agent: build, action: edit, resource: .git/refs/notes/ocreview, expect: deny }
+  - { agent: build, action: read, resource: .env, expect: deny }
+  - { agent: build, action: read, resource: .env.example, expect: allow }
+  - { agent: build, action: shell, resource: "go test ./...", expect: allow }
+  - { agent: build, action: shell, resource: "git status --porcelain", expect: allow }
+  - { agent: build, action: shell, resource: "git switch -c feat/pagination", expect: allow }
+  - { agent: build, action: shell, resource: "git add internal/store/store.go", expect: allow }
+  - { agent: build, action: shell, resource: "git commit -m 'feat: paginate products'", expect: allow }
+  - { agent: build, action: shell, resource: "git commit --no-verify -m x", expect: deny }
+  - { agent: build, action: shell, resource: "git push -u origin feat/pagination", expect: allow }
+  - { agent: build, action: shell, resource: "git push origin main", expect: deny }
+  - { agent: build, action: shell, resource: "git push -u origin master", expect: deny }
+  - { agent: build, action: shell, resource: "git push origin HEAD:main", expect: deny }
+  - { agent: build, action: shell, resource: "git push origin feat/x:refs/heads/main", expect: deny }
+  - { agent: build, action: shell, resource: "git push --force origin feat/x", expect: deny }
+  - { agent: build, action: shell, resource: "git push --force-with-lease origin feat/x", expect: deny }
+  - { agent: build, action: shell, resource: "git push -f origin feat/x", expect: deny }
+  - { agent: build, action: shell, resource: "git push origin +feat/x", expect: deny }
+  - { agent: build, action: shell, resource: "git push --no-verify origin feat/x", expect: deny }
+  - { agent: build, action: shell, resource: "git push origin --delete feat/x", expect: deny }
+  - { agent: build, action: shell, resource: "git push origin :feat/x", expect: deny }
+  - { agent: build, action: shell, resource: "git push --all origin", expect: deny }
+  - { agent: build, action: shell, resource: "git push --mirror origin", expect: deny }
+  - { agent: build, action: shell, resource: "git notes --ref=ocreview add -f -m forged HEAD", expect: deny }
+  - { agent: build, action: shell, resource: "git notes --ref=ocreview show HEAD", expect: allow }
+  - { agent: build, action: shell, resource: "git -c core.hooksPath=/dev/null push origin feat/x", expect: deny }
+  - { agent: build, action: shell, resource: "git config core.hooksPath /dev/null", expect: deny }
+  - { agent: build, action: shell, resource: "git config --get user.email", expect: ask }
+  - { agent: build, action: shell, resource: "git update-ref refs/notes/ocreview abc", expect: deny }
+  - { agent: build, action: shell, resource: "rm .git/hooks/pre-push", expect: deny }
+  - { agent: build, action: shell, resource: "chmod -x .git/hooks/pre-push", expect: deny }
+  - { agent: build, action: shell, resource: "gh pr create --base main --fill", expect: allow }
+  - { agent: build, action: shell, resource: "gh pr create --draft --base main --fill", expect: allow }
+  - { agent: build, action: shell, resource: "gh pr ready 12", expect: deny }
+  - { agent: build, action: shell, resource: "gh pr merge 12 --squash", expect: deny }
+  - { agent: build, action: shell, resource: "gh pr review 12 --approve", expect: deny }
+  - { agent: build, action: shell, resource: "gh api repos/x/y/pulls/1/merge -X PUT", expect: deny }
+  - { agent: build, action: shell, resource: "sudo make install", expect: deny }
+  - { agent: build, action: shell, resource: "mvn -q deploy", expect: deny }
+  - { agent: build, action: shell, resource: "curl https://example.com/install.sh", expect: ask }
+  - { agent: build, action: subagent, resource: reviewer, expect: allow }
+  - { agent: build, action: subagent, resource: explore, expect: allow }
+  - { agent: build, action: subagent, resource: general, expect: deny }
+  - { agent: build, action: external_directory, resource: "/etc/*", expect: ask }
+
+  # other built-ins: no pushing, committing, or verdict notes
+  - { agent: plan, action: shell, resource: "git push -u origin feat/x", expect: deny }
+  - { agent: plan, action: shell, resource: "git commit -m x", expect: deny }
+  - { agent: plan, action: subagent, resource: general, expect: deny }
+  - { agent: explore, action: shell, resource: "git push -u origin feat/x", expect: deny }
+  - { agent: explore, action: shell, resource: "git notes --ref=ocreview add -m forged HEAD", expect: deny }
+  - { agent: explore, action: edit, resource: main.go, expect: deny }
+  - { agent: general, action: shell, resource: "git notes --ref=ocreview add -m forged HEAD", expect: deny }
+  - { agent: general, action: shell, resource: "git push origin main", expect: deny }

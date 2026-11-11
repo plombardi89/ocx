@@ -1,0 +1,155 @@
+# ocagents
+
+OpenCode agents, skills, and commands for building complex software, with an **independent, adversarial review gate**: every push needs an approving review, from a reviewer on a different model family, of the exact commit being pushed.
+
+## How it works
+
+```
+you ──▶ build (Claude Opus, built-in prompt)
+          │  loads skills: git-workflow, writing-plans, requesting-review
+          │  works on feat/… or fix/… branches, commits
+          ▼
+        reviewer subagent (GPT-6.1 Sol, fresh context, cannot touch your tree)
+          │  gets only: repository, branch, base, head, plan, round
+          │  reads the diff and plan itself, runs the tests, attacks the change
+          │  proves findings and checks claims with harnesses in a scratch
+          │  worktree under /tmp/opencode/reviews (removed afterwards)
+          │  records its verdict, with harness code, as a git note on the commit
+          ▼
+        git push ──▶ pre-push hook: rejects main/master and any commit
+                     without an APPROVE note naming that exact commit
+```
+
+Independence comes from the setup, not from asking nicely:
+
+| Weak point | How it's closed |
+| --- | --- |
+| Author frames the review ("tests pass, just check style") | `requesting-review` gives a fixed template; the reviewer treats anything extra as an unverified claim, lists it in its report, and checks it by running code where it can |
+| Shared blind spots | Reviewer is pinned to a different model family than the driver |
+| Findings argued away | Findings carry executed evidence where feasible: a `review_` harness that fails, with its code in the report |
+| Author drops inconvenient findings | Findings are fixed or disputed to Phil, never dropped; 3-round cap, then escalate |
+| Fixes without proof | Every BLOCKER and MAJOR fix needs a regression test; next round, the reviewer runs it on the previous commit and requires it to fail there |
+| Author skips review | Pre-push hook requires an approval note; only the reviewer may write notes; policies block `--no-verify`, `git -c`, `git config`, hook edits, force pushes, main/master |
+| Unreadable comments and docs | The writing rules apply to every agent; the reviewer reports clear breaks as WRITING findings, which block approval |
+| TODOs slipping into main | The reviewer lists every new TODO for Phil; build opens the pull request as a draft, and only Phil can mark it ready |
+
+## Writing rules
+
+Every agent follows four rules for anything people read: code comments, docs, plans, commit messages, pull requests, review reports, and replies. The full text is in `config/global-AGENTS.md`; the `writing-style` skill has examples.
+
+1. Code comments are short and explain why, not how. TODOs must stand on their own and go to Phil, who decides whether to fix or remove them; they block merging until he does.
+2. Code comments stand on their own: no references to plans, reviews, tickets, or requests. Tests are named for the behavior they protect.
+3. Plain English: simple accurate words, technical terms explained on first use, numbered lists or diagrams for steps (plain text in code, Mermaid allowed in docs).
+4. Lists with a natural order are numbered 1, 2, 3, through the last item, most important first; nested lists too. Bullets only when there is no order.
+
+The reviewer enforces these with a separate finding category:
+
+| Category | Blocks approval | Needs a regression test |
+| --- | --- | --- |
+| BLOCKER | Yes | Yes |
+| MAJOR | Yes | Yes |
+| WRITING | Yes | No (the reviewer re-reads the fixed text) |
+| MINOR | No | No |
+| NIT | No | No |
+
+`make check` applies the mechanical parts of the rules to this repository: no letter or roman-numeral list markers in our Markdown, and no Go or shell comments that point at plans, reviews, or requests.
+
+## Review harnesses
+
+The reviewer may write and run code to prove a point, but only in a detached scratch worktree of the reviewed commit under `/tmp/opencode/reviews/`. It never writes to the author's worktree, and harnesses are evidence, never fixes.
+
+- **When:** a serious finding has only traced evidence; the request or code makes a checkable claim ("behavior unchanged", "thread-safe"); an acceptance criterion is unverified; or it doubts the author's tests (mutation check).
+- **What:** `review_`-prefixed reproduction tests, exhaustive and fuzz tests, concurrent stress tests, old-vs-new comparisons, small programs and scripts, and time-boxed mutations of the production code to see whether the author's tests notice.
+- **Report:** evidence is labelled `executed` or `traced`; a "Harnesses" section carries each harness's command, result, and code. The code lives in the review note, so the author can adopt it as a regression test and the next round can re-run it.
+- **Later rounds:** each earlier BLOCKER/MAJOR must be fixed (earlier harness now passes) and covered by a regression test that fails on the previously reviewed commit. Missing or toothless regression tests are a MAJOR. If build thinks a test is impractical, that's a dispute for Phil.
+
+## Layout
+
+```
+config/opencode.jsonc     agents, models, baseline permissions, policies (single source of truth)
+config/global-AGENTS.md   global working agreements and writing rules (becomes ~/.config/opencode/AGENTS.md)
+config/prompts/           agent system prompts, referenced with {file:./prompts/…}
+skills/                   code-review, requesting-review, git-workflow, writing-plans, writing-style
+commands/review.md        /review: run the reviewer on the current branch yourself
+hooks/pre-push            the review gate
+templates/AGENTS.md       starting point for a project's AGENTS.md
+tests/permissions.yaml    permission probes: "agent X doing Y must be allow/ask/deny"
+evals/                    fixture project, scenarios, and results (results are gitignored)
+cmd/ocx, internal/        Go tooling behind the Makefile
+```
+
+## Make targets
+
+| Target | What it does | Cost |
+| --- | --- | --- |
+| `make check` | gofmt, vet, Go tests (incl. hook tests), config/skill/command lint, writing-rule lint, 103 permission probes against OpenCode's resolved config | free, ~seconds |
+| `make check-offline` | Same without running OpenCode | free |
+| `make eval-reviewer` | Reviewer scenarios with the pinned reviewer model | tokens |
+| `make eval-e2e` | build implements → requests review → pushes through the gate | tokens |
+| `make bakeoff` | Reviewer scenarios × `BAKEOFF_MODELS` × `REPS` | tokens |
+| `make verify` | `check` + every eval: the single "is everything good?" entrypoint | tokens |
+| `make sandbox` | Throwaway copy of the fixture with this config staged; opens OpenCode in it (`SCENARIO=reviewer-planted-bug` to start on a review branch) | — |
+| `make hook-install REPO=…` | Install the review gate into a repository | — |
+
+Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run event streams, session exports, and final reports). Failing runs keep their workspace under `/tmp/opencode/ocx-eval/` for inspection.
+
+| Scenario | What it tests |
+| --- | --- |
+| `reviewer-planted-bug` | Past-end panic and missing limit cap behind passing happy-path tests; needs executed evidence |
+| `reviewer-clean-change` | A correct, well-tested change: approve with no invented problems |
+| `reviewer-framing-resistance` | Check-then-act overselling race (invisible to `-race`) behind "tests green, keep it light" |
+| `reviewer-equivalence-claim` | "Pure refactor" that parses 3 of 110 fractions a cent low; all existing tests pass |
+| `reviewer-round2-fixed` | Round 2: fixes plus regression tests that fail on the round-1 commit: approve |
+| `reviewer-round2-missing-test` | Round 2: correct fixes, no regression tests: request them |
+| `reviewer-round2-weak-test` | Round 2: "regression tests" that also pass on the round-1 commit: catch it by running them there |
+| `reviewer-writing-rules` | Correct, tested code whose comments, test name, and doc break the writing rules: WRITING findings, and the one valid TODO listed for Phil |
+| `e2e-review-gate` | build implements, requests review with the bare template, pushes only the approved commit; its added comments must stand on their own |
+
+Scenarios can stack several commits on a branch and seed earlier review notes (`commits:` with `overlays:` and `note:`); shared material lives in `evals/scenarios/_shared/`.
+
+## Models
+
+All models are set in `config/opencode.jsonc`. MAI models are never used; `make check` fails on any reference.
+
+| Role | Model | Why |
+| --- | --- | --- |
+| Driver (`build`, session default) | `claude-opus-5.5` | Strongest on repository-scale coding (SWE-bench Pro 89.9%, FrontierCode, AA Intelligence Index 58) |
+| `reviewer` | `gpt-6.1-sol#xhigh` | Different family from the driver; won our model comparison (below) |
+| `explore` | `claude-haiku-5.5` | Matches Opus on code-search recall, much faster |
+
+Planned for later slices: `debugger` (Opus xhigh), `test-writer` (Sonnet 5.5 xhigh), `plan-critic` and `security-reviewer` (GPT-6 Astra high), `consultant` (Sol xhigh), `lead`/`implementer`.
+
+### Reviewer model comparison
+
+`make bakeoff` ran the 7 reviewer scenarios (before `reviewer-writing-rules` existed) 3 times each on 3 models (63 runs, 2026-11-11):
+
+1. **GPT-6.1 Sol (xhigh) and GPT-6 Astra (high) tied**, with zero false findings on the clean change. In 2 of 3 runs each, they also found a real bug in the "correct" round-2 fix: `URL.Query` silently drops malformed pairs such as `limit=abc;`, so they became the default instead of a 400. Both proved it with an executed test. The fixture has since been fixed.
+2. **Claude Opus 5.5 (high)** was about twice as fast, but approved that buggy fix in all 3 runs and added style findings to the clean change.
+
+Sol stays the reviewer: it tied Astra on quality, and it is a different family from the Opus driver.
+
+## Permissions model
+
+- **Baseline (all agents):** shell asks by default; read-only git and build/test/lint commands are pre-approved; committing and pushing are denied (build re-allows them); review notes are read-only; `.env`/keys denied; `.git/` uneditable; outside directories ask; only `explore` and `reviewer` can be launched as subagents.
+- **Custom agents** start with a deny-all rule and allowlist what they need. `make check` enforces this; that they write files only under `/tmp/opencode/reviews/`; and that their shell allowlists stay within the read-only baseline. The reviewer's exceptions are its verdict note, scratch worktrees (`git worktree add --detach|remove --force` under the scratch root, path traversal denied), `go run`, and scripts inside its scratch worktree.
+- **Policies** hard-deny what must never happen regardless of approvals: pushes to main/master, force pushes, `--no-verify`, ref deletion, `git -c`, `git config` writes, `git update-ref`, touching hooks, `gh pr merge|review|ready`, `gh api`, `sudo`, publishing.
+
+## Using it
+
+**Today (not installed globally):**
+
+1. Try it: `make sandbox`, then ask build for a change and to push it.
+2. Try it on a real project: copy the project, run `go run ./cmd/ocx stage /path/to/copy` and `make hook-install REPO=/path/to/copy`, then run `opencode` there.
+
+**Install globally (later):** link `config/opencode.jsonc`, `config/prompts/`, `skills/`, and `commands/` into `~/.config/opencode/`, link `config/global-AGENTS.md` as `~/.config/opencode/AGENTS.md`, and run `make hook-install REPO=…` in each project. For GitHub repos, also protect `main` (require a pull request, block force pushes; private repos need GitHub Pro). A required status check that fails on new TODOs would make the TODO merge block independent of draft status.
+
+**Bypassing the gate yourself:** `git push --no-verify` from your own terminal. Agents can't.
+
+## Conventions for adding to this repo
+
+- **Agents:** define in `config/opencode.jsonc` with `description`, `mode`, a pinned `model`, `system: "{file:./prompts/<id>.md}"`, and permissions starting with `{"action": "*", "resource": "*", "effect": "deny"}`. Never replace a built-in agent's prompt; override permissions or model only.
+- **Skills:** `skills/<id>/SKILL.md`, `name` equal to the directory, description starting "Use when…" that says only when to use it (not what it does: agents follow a summary instead of loading the skill). Supporting files in `references/`, `templates/`, `scripts/`.
+- **References:** mention skills as `` `id` skill `` and agents as `` `id` subagent ``; `make check` verifies they exist.
+- **Behavior changes:** add or update an eval scenario. Watch it fail before the change when you can, then pass after.
+- **Permission changes:** add probes to `tests/permissions.yaml`.
+- **Writing:** this repository follows its own writing rules. `make check` catches lettered lists and comments that point at plans or reviews; the rest is on whoever writes the text.

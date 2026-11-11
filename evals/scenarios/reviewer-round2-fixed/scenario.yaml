@@ -1,0 +1,28 @@
+name: reviewer-round2-fixed
+description: Round 2 after the pagination review. Both findings are fixed with regression tests that fail on the round-1 commit; the reviewer should approve.
+fixture: go-service
+tags: [reviewer, round2]
+agent: reviewer
+bakeoff: true
+branch: feat/product-pagination
+commits:
+  - message: "feat: paginate the product list"
+    overlay: ../reviewer-planted-bug/overlay
+    note: ../_shared/pagination-round1-note.md
+  - message: "fix: handle offsets past the end and cap the page size"
+    overlays: [../_shared/pagination-fix, tests]
+prompt: |
+  Review request
+  Repository: {{.Repo}}
+  Branch: {{.Branch}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0001-product-pagination.md
+  Round: 2
+  Previous review: {{index .Commits 0}}
+expect:
+  verdict: APPROVE
+  note: true
+  unchanged: true
+  skill_loaded: code-review
+  edits_in_scratch_only: true

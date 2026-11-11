@@ -1,0 +1,28 @@
+name: reviewer-writing-rules
+description: Correct, tested low-stock report whose comments, test name, and doc break the writing rules, plus one valid TODO that must be raised to Phil rather than flagged.
+fixture: go-service
+tags: [reviewer, writing]
+agent: reviewer
+bakeoff: true
+branch: feat/low-stock-report
+commit_message: "feat: add a low-stock report to the store"
+prompt: |
+  Review request
+  Repository: {{.Repo}}
+  Branch: {{.Branch}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0005-low-stock-report.md
+  Round: 1
+  Previous review: none
+expect:
+  verdict: REQUEST_CHANGES
+  min_writing: 3
+  mentions:
+    - "(?i)\\[WRITING\\]"
+    - "(?is)## TODOs for Phil.*sort order"
+    - "(?i)(TestPlan0005Task2|test name)"
+  note: true
+  unchanged: true
+  skill_loaded: code-review
+  edits_in_scratch_only: true

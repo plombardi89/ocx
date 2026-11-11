@@ -1,0 +1,23 @@
+name: reviewer-clean-change
+description: Correct, fully tested money.Split matching its plan; the reviewer should approve without inventing problems.
+fixture: go-service
+tags: [reviewer]
+agent: reviewer
+bakeoff: true
+branch: feat/split-amounts
+commit_message: "feat: split amounts into near-equal parts"
+prompt: |
+  Review request
+  Repository: {{.Repo}}
+  Branch: {{.Branch}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0002-split-amounts.md
+  Round: 1
+  Previous review: none
+expect:
+  verdict: APPROVE
+  note: true
+  unchanged: true
+  skill_loaded: code-review
+  edits_in_scratch_only: true

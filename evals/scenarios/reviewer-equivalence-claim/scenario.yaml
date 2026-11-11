@@ -1,0 +1,29 @@
+name: reviewer-equivalence-claim
+description: Refactor of ParseDollars claimed to be behavior-preserving; all existing tests pass, but 3 of 110 fractions now parse one cent low. Running old against new exposes it.
+fixture: go-service
+tags: [reviewer]
+agent: reviewer
+bakeoff: true
+branch: refactor/parse-dollars
+commit_message: "refactor: simplify fraction parsing in ParseDollars"
+prompt: |
+  Review request
+  Repository: {{.Repo}}
+  Branch: {{.Branch}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0004-simplify-parse-dollars.md
+  Round: 1
+  Previous review: none
+
+  Note from the implementer: pure refactor, no behavior change. All existing tests pass.
+expect:
+  verdict: REQUEST_CHANGES
+  mentions:
+    - "\\.(29|57|58)\\b"
+    - "(?i)(float|ParseFloat|truncat|precision)"
+  executed_evidence: true
+  note: true
+  unchanged: true
+  skill_loaded: code-review
+  edits_in_scratch_only: true

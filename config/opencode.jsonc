@@ -1,0 +1,270 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // ── Models ──────────────────────────────────────────────────────────────
+  // All model choices live in this file. Change a role's model on its agent
+  // below; `make check` validates every reference. Rationale is in README.md.
+  //
+  //   driver    github-copilot/claude-opus-5.5        session default (you drive with it)
+  //   reviewer  github-copilot/gpt-6.1-sol#xhigh      other family than the driver, on purpose
+  //   search    github-copilot/claude-haiku-5.5       built-in explore subagent
+  //
+  // MAI models are never used; `make check` fails if one is referenced.
+  "model": "github-copilot/claude-opus-5.5",
+
+  // ── Baseline permissions (every agent) ──────────────────────────────────
+  // Evaluated in order; the last matching rule wins. Custom agents start
+  // their own list with a deny-all rule, so this baseline mainly shapes the
+  // built-in agents (build, plan, explore, general).
+  "permissions": [
+    // Shell: ask by default. Allow read-only inspection and build/test/lint.
+    { "action": "shell", "resource": "*", "effect": "ask" },
+
+    { "action": "shell", "resource": "git status *", "effect": "allow" },
+    { "action": "shell", "resource": "git diff *", "effect": "allow" },
+    { "action": "shell", "resource": "git log *", "effect": "allow" },
+    { "action": "shell", "resource": "git show *", "effect": "allow" },
+    { "action": "shell", "resource": "git rev-parse *", "effect": "allow" },
+    { "action": "shell", "resource": "git merge-base *", "effect": "allow" },
+    { "action": "shell", "resource": "git blame *", "effect": "allow" },
+    { "action": "shell", "resource": "git ls-files *", "effect": "allow" },
+    { "action": "shell", "resource": "git branch --show-current", "effect": "allow" },
+    { "action": "shell", "resource": "git branch --list *", "effect": "allow" },
+    { "action": "shell", "resource": "git describe *", "effect": "allow" },
+    { "action": "shell", "resource": "git remote -v", "effect": "allow" },
+    { "action": "shell", "resource": "git fetch *", "effect": "allow" },
+
+    { "action": "shell", "resource": "go build *", "effect": "allow" },
+    { "action": "shell", "resource": "go test *", "effect": "allow" },
+    { "action": "shell", "resource": "go vet *", "effect": "allow" },
+    { "action": "shell", "resource": "go list *", "effect": "allow" },
+    { "action": "shell", "resource": "go doc *", "effect": "allow" },
+    { "action": "shell", "resource": "go env *", "effect": "allow" },
+    { "action": "shell", "resource": "go version", "effect": "allow" },
+    { "action": "shell", "resource": "gofmt -l *", "effect": "allow" },
+    { "action": "shell", "resource": "gofmt -d *", "effect": "allow" },
+    { "action": "shell", "resource": "golangci-lint run *", "effect": "allow" },
+    { "action": "shell", "resource": "staticcheck *", "effect": "allow" },
+    { "action": "shell", "resource": "govulncheck *", "effect": "allow" },
+
+    { "action": "shell", "resource": "pytest *", "effect": "allow" },
+    { "action": "shell", "resource": "python -m pytest *", "effect": "allow" },
+    { "action": "shell", "resource": "python3 -m pytest *", "effect": "allow" },
+    { "action": "shell", "resource": "uv run pytest *", "effect": "allow" },
+    { "action": "shell", "resource": "ruff check *", "effect": "allow" },
+    { "action": "shell", "resource": "ruff format --check *", "effect": "allow" },
+    { "action": "shell", "resource": "mypy *", "effect": "allow" },
+
+    { "action": "shell", "resource": "shellcheck *", "effect": "allow" },
+    { "action": "shell", "resource": "bash -n *", "effect": "allow" },
+    { "action": "shell", "resource": "sh -n *", "effect": "allow" },
+
+    { "action": "shell", "resource": "mvn test *", "effect": "allow" },
+    { "action": "shell", "resource": "mvn -q test *", "effect": "allow" },
+    { "action": "shell", "resource": "mvn verify *", "effect": "allow" },
+    { "action": "shell", "resource": "./mvnw test *", "effect": "allow" },
+    { "action": "shell", "resource": "./mvnw verify *", "effect": "allow" },
+    { "action": "shell", "resource": "gradle test *", "effect": "allow" },
+    { "action": "shell", "resource": "./gradlew test *", "effect": "allow" },
+    { "action": "shell", "resource": "./gradlew check *", "effect": "allow" },
+
+    { "action": "shell", "resource": "make test *", "effect": "allow" },
+    { "action": "shell", "resource": "make check *", "effect": "allow" },
+    { "action": "shell", "resource": "make lint *", "effect": "allow" },
+
+    { "action": "shell", "resource": "ls *", "effect": "allow" },
+    { "action": "shell", "resource": "pwd", "effect": "allow" },
+    { "action": "shell", "resource": "which *", "effect": "allow" },
+    { "action": "shell", "resource": "wc *", "effect": "allow" },
+
+    // Writing to git history and the remote is build's job (see agents.build).
+    { "action": "shell", "resource": "git commit *", "effect": "deny" },
+    { "action": "shell", "resource": "git push *", "effect": "deny" },
+    { "action": "shell", "resource": "gh pr create *", "effect": "deny" },
+
+    // Review verdicts are git notes only the reviewer may write.
+    { "action": "shell", "resource": "git notes *", "effect": "deny" },
+    { "action": "shell", "resource": "git notes --ref=ocreview show *", "effect": "allow" },
+
+    // Secrets and git internals.
+    { "action": "read", "resource": "*.env", "effect": "deny" },
+    { "action": "read", "resource": "*.env.*", "effect": "deny" },
+    { "action": "read", "resource": "*.env.example", "effect": "allow" },
+    { "action": "read", "resource": "*.pem", "effect": "deny" },
+    { "action": "read", "resource": "*/.ssh/*", "effect": "deny" },
+    { "action": "edit", "resource": ".git/*", "effect": "deny" },
+    { "action": "edit", "resource": "*/.git/*", "effect": "deny" },
+
+    // Outside the project: ask, except Go module sources and installed skills.
+    { "action": "external_directory", "resource": "*", "effect": "ask" },
+    { "action": "external_directory", "resource": "~/go/pkg/mod/*", "effect": "allow" },
+    { "action": "external_directory", "resource": "~/.config/opencode/skills/*", "effect": "allow" },
+
+    // Only these subagents may be launched.
+    { "action": "subagent", "resource": "*", "effect": "deny" },
+    { "action": "subagent", "resource": "explore", "effect": "allow" },
+    { "action": "subagent", "resource": "reviewer", "effect": "allow" }
+  ],
+
+  // ── Hard blocks (policies) ──────────────────────────────────────────────
+  // Policies never prompt and override every permission and saved approval.
+  "policies": [
+    { "action": "tool.use", "resource": "shell:sudo *", "effect": "deny" },
+
+    // Never push to main/master, force-push, skip hooks, or delete remote refs.
+    // A pattern ending in " *" also matches without the trailing arguments.
+    { "action": "tool.use", "resource": "shell:git push * main *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push * master *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push *:main *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push *:master *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push *refs/heads/main*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push *refs/heads/master*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push *--force*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push -f *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push * -f *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push *+*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push *--no-verify*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push *--mirror*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push *--all*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push *--delete*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push -d *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push * -d *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push * :*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git commit *--no-verify*", "effect": "deny" },
+
+    // Protect the review gate itself.
+    { "action": "tool.use", "resource": "shell:git -c *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git config *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git config --get *", "effect": "allow" },
+    { "action": "tool.use", "resource": "shell:git config --list *", "effect": "allow" },
+    { "action": "tool.use", "resource": "shell:git update-ref *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*.git/hooks*", "effect": "deny" },
+    { "action": "tool.use", "resource": "edit:.git/*", "effect": "deny" },
+    { "action": "tool.use", "resource": "edit:*/.git/*", "effect": "deny" },
+
+    // Merging, approving, marking pull requests ready, and raw API calls are
+    // Phil's. A draft pull request can't be merged, so drafts wait for him.
+    { "action": "tool.use", "resource": "shell:gh pr merge *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:gh pr review *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:gh pr ready *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:gh api *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:gh repo delete *", "effect": "deny" },
+
+    // Publishing artifacts.
+    { "action": "tool.use", "resource": "shell:mvn *deploy*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:./mvnw *deploy*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:gradle *publish*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:./gradlew *publish*", "effect": "deny" }
+  ],
+
+  "agents": {
+    // Built-in coding agent: keep its prompt, add the write operations it owns.
+    // Pushes still need an approving review (pre-push hook) and are blocked
+    // from main/master by the policies above.
+    "build": {
+      "permissions": [
+        { "action": "shell", "resource": "git add *", "effect": "allow" },
+        { "action": "shell", "resource": "git commit *", "effect": "allow" },
+        { "action": "shell", "resource": "git switch *", "effect": "allow" },
+        { "action": "shell", "resource": "git checkout -b *", "effect": "allow" },
+        { "action": "shell", "resource": "git push *", "effect": "allow" },
+        { "action": "shell", "resource": "gh pr create *", "effect": "allow" },
+        { "action": "shell", "resource": "gh pr view *", "effect": "allow" },
+        { "action": "shell", "resource": "gh pr status *", "effect": "allow" },
+        { "action": "shell", "resource": "gh pr checks *", "effect": "allow" },
+        { "action": "shell", "resource": "go mod tidy *", "effect": "allow" },
+        { "action": "shell", "resource": "gofmt -w *", "effect": "allow" },
+        { "action": "shell", "resource": "go fmt *", "effect": "allow" },
+        { "action": "shell", "resource": "ruff format *", "effect": "allow" }
+      ]
+    },
+
+    // Built-in read-only search subagent: same accuracy on code search, faster.
+    "explore": {
+      "model": "github-copilot/claude-haiku-5.5"
+    },
+
+    "reviewer": {
+      "description": "Independent, adversarial code reviewer. Launch it to review a committed branch before any push. Give it only the 'Review request' fields (repository, branch, base, head, plan, round, previous review); it reads the diff and plan itself and records its verdict as a git note.",
+      "mode": "subagent",
+      "model": "github-copilot/gpt-6.1-sol#xhigh",
+      "color": "#d97706",
+      "system": "{file:./prompts/reviewer.md}",
+      "permissions": [
+        { "action": "*", "resource": "*", "effect": "deny" },
+
+        { "action": "read", "resource": "*", "effect": "allow" },
+        { "action": "glob", "resource": "*", "effect": "allow" },
+        { "action": "grep", "resource": "*", "effect": "allow" },
+        { "action": "read", "resource": "*.env", "effect": "deny" },
+        { "action": "read", "resource": "*.env.*", "effect": "deny" },
+        { "action": "read", "resource": "*.env.example", "effect": "allow" },
+        { "action": "read", "resource": "*.pem", "effect": "deny" },
+        { "action": "read", "resource": "*/.ssh/*", "effect": "deny" },
+        { "action": "external_directory", "resource": "~/go/pkg/mod/*", "effect": "allow" },
+        { "action": "external_directory", "resource": "~/.config/opencode/skills/*", "effect": "allow" },
+
+        { "action": "skill", "resource": "code-review", "effect": "allow" },
+        { "action": "skill", "resource": "writing-style", "effect": "allow" },
+
+        // Scratch area for review harnesses: a detached worktree of the
+        // reviewed commit under /tmp/opencode/reviews. The only place the
+        // reviewer may write files; the author's worktree stays untouched.
+        { "action": "external_directory", "resource": "/tmp/opencode/reviews/*", "effect": "allow" },
+        { "action": "edit", "resource": "/tmp/opencode/reviews/*", "effect": "allow" },
+        { "action": "shell", "resource": "git worktree add --detach /tmp/opencode/reviews/* *", "effect": "allow" },
+        { "action": "shell", "resource": "git worktree remove --force /tmp/opencode/reviews/*", "effect": "allow" },
+        { "action": "shell", "resource": "git worktree prune", "effect": "allow" },
+        { "action": "shell", "resource": "git worktree list *", "effect": "allow" },
+        { "action": "shell", "resource": "bash /tmp/opencode/reviews/*", "effect": "allow" },
+        { "action": "shell", "resource": "sh /tmp/opencode/reviews/*", "effect": "allow" },
+        { "action": "shell", "resource": "git worktree */..*", "effect": "deny" },
+        { "action": "shell", "resource": "bash */..*", "effect": "deny" },
+        { "action": "shell", "resource": "sh */..*", "effect": "deny" },
+        { "action": "shell", "resource": "go run *", "effect": "allow" },
+        { "action": "shell", "resource": "git status *", "effect": "allow" },
+        { "action": "shell", "resource": "git diff *", "effect": "allow" },
+        { "action": "shell", "resource": "git log *", "effect": "allow" },
+        { "action": "shell", "resource": "git show *", "effect": "allow" },
+        { "action": "shell", "resource": "git rev-parse *", "effect": "allow" },
+        { "action": "shell", "resource": "git merge-base *", "effect": "allow" },
+        { "action": "shell", "resource": "git blame *", "effect": "allow" },
+        { "action": "shell", "resource": "git ls-files *", "effect": "allow" },
+        { "action": "shell", "resource": "git branch --show-current", "effect": "allow" },
+        { "action": "shell", "resource": "git notes --ref=ocreview show *", "effect": "allow" },
+        // The reviewer's only write: its verdict on the reviewed commit.
+        { "action": "shell", "resource": "git notes --ref=ocreview add *", "effect": "allow" },
+
+        { "action": "shell", "resource": "go build *", "effect": "allow" },
+        { "action": "shell", "resource": "go test *", "effect": "allow" },
+        { "action": "shell", "resource": "go vet *", "effect": "allow" },
+        { "action": "shell", "resource": "go list *", "effect": "allow" },
+        { "action": "shell", "resource": "go doc *", "effect": "allow" },
+        { "action": "shell", "resource": "go env *", "effect": "allow" },
+        { "action": "shell", "resource": "gofmt -l *", "effect": "allow" },
+        { "action": "shell", "resource": "gofmt -d *", "effect": "allow" },
+        { "action": "shell", "resource": "golangci-lint run *", "effect": "allow" },
+        { "action": "shell", "resource": "staticcheck *", "effect": "allow" },
+        { "action": "shell", "resource": "pytest *", "effect": "allow" },
+        { "action": "shell", "resource": "python -m pytest *", "effect": "allow" },
+        { "action": "shell", "resource": "python3 -m pytest *", "effect": "allow" },
+        { "action": "shell", "resource": "uv run pytest *", "effect": "allow" },
+        { "action": "shell", "resource": "ruff check *", "effect": "allow" },
+        { "action": "shell", "resource": "mypy *", "effect": "allow" },
+        { "action": "shell", "resource": "shellcheck *", "effect": "allow" },
+        { "action": "shell", "resource": "bash -n *", "effect": "allow" },
+        { "action": "shell", "resource": "sh -n *", "effect": "allow" },
+        { "action": "shell", "resource": "mvn test *", "effect": "allow" },
+        { "action": "shell", "resource": "mvn -q test *", "effect": "allow" },
+        { "action": "shell", "resource": "./mvnw test *", "effect": "allow" },
+        { "action": "shell", "resource": "gradle test *", "effect": "allow" },
+        { "action": "shell", "resource": "./gradlew test *", "effect": "allow" },
+        { "action": "shell", "resource": "make test *", "effect": "allow" },
+        { "action": "shell", "resource": "make check *", "effect": "allow" },
+        { "action": "shell", "resource": "make lint *", "effect": "allow" },
+        { "action": "shell", "resource": "ls *", "effect": "allow" },
+        { "action": "shell", "resource": "wc *", "effect": "allow" }
+      ]
+    }
+  }
+}

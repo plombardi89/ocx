@@ -1,0 +1,30 @@
+name: reviewer-round2-missing-test
+description: Round 2 after the pagination review. Both findings are fixed correctly, but no regression tests were added; the reviewer must request them.
+fixture: go-service
+tags: [reviewer, round2]
+agent: reviewer
+bakeoff: true
+branch: feat/product-pagination
+commits:
+  - message: "feat: paginate the product list"
+    overlay: ../reviewer-planted-bug/overlay
+    note: ../_shared/pagination-round1-note.md
+  - message: "fix: handle offsets past the end and cap the page size"
+    overlay: ../_shared/pagination-fix
+prompt: |
+  Review request
+  Repository: {{.Repo}}
+  Branch: {{.Branch}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0001-product-pagination.md
+  Round: 2
+  Previous review: {{index .Commits 0}}
+expect:
+  verdict: REQUEST_CHANGES
+  mentions:
+    - "(?i)(missing regression test|regression test:?\\s*MISSING)"
+  note: true
+  unchanged: true
+  skill_loaded: code-review
+  edits_in_scratch_only: true

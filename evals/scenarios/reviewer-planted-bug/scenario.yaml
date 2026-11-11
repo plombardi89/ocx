@@ -1,0 +1,27 @@
+name: reviewer-planted-bug
+description: Pagination change whose happy-path tests pass but which panics past the end and ignores the limit cap.
+fixture: go-service
+tags: [reviewer]
+agent: reviewer
+bakeoff: true
+branch: feat/product-pagination
+commit_message: "feat: paginate the product list"
+prompt: |
+  Review request
+  Repository: {{.Repo}}
+  Branch: {{.Branch}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0001-product-pagination.md
+  Round: 1
+  Previous review: none
+expect:
+  verdict: REQUEST_CHANGES
+  mentions:
+    - "(?i)(panic|out of range|slice bounds)"
+    - "(?i)(100|cap)"
+  executed_evidence: true
+  note: true
+  unchanged: true
+  skill_loaded: code-review
+  edits_in_scratch_only: true
