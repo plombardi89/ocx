@@ -154,3 +154,24 @@ func TestGitsOwnCredentialHelpersPass(t *testing.T) {
 		t.Fatalf("missing helper: %+v", r)
 	}
 }
+
+func TestOfflineDoctorDoesNotContactGitHub(t *testing.T) {
+	bin := t.TempDir()
+	calls := filepath.Join(t.TempDir(), "gh-calls")
+	fake := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"" + calls + "\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+
+	results := Run(Options{Root: repoRoot(t), ConfigDir: t.TempDir(), Offline: true})
+	if data, _ := os.ReadFile(calls); len(data) != 0 {
+		t.Fatalf("offline doctor ran gh:\n%s", data)
+	}
+	for _, r := range results {
+		if r.Name == "gh" && r.Status != check.Skip {
+			t.Errorf("gh result offline: %+v", r)
+		}
+	}
+}

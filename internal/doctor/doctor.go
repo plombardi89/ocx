@@ -41,7 +41,7 @@ func Run(opts Options) []check.Result {
 	} else {
 		results = append(results, checkLoaded(opts))
 	}
-	results = append(results, checkTools()...)
+	results = append(results, checkTools(opts.Offline)...)
 	for _, repo := range opts.Repos {
 		results = append(results, checkRepo(opts, repo)...)
 	}
@@ -123,10 +123,13 @@ func checkLoaded(opts Options) check.Result {
 	return check.CompareResolved(name, opts.Root, cfgPath, cfg, agents)
 }
 
-func checkTools() []check.Result {
+func checkTools(offline bool) []check.Result {
 	var out []check.Result
 	if _, err := exec.LookPath("gh"); err != nil {
 		out = append(out, warn("gh", "not installed; doctor can't check GitHub branch protection"))
+	} else if offline {
+		// gh auth status checks the stored credentials with GitHub.
+		out = append(out, check.Result{Name: "gh", Status: check.Skip, Details: []string{"installed; login not checked offline"}})
 	} else if err := run(10*time.Second, "", "gh", "auth", "status"); err != nil {
 		out = append(out, warn("gh", "not logged in; run: gh auth login"))
 	} else {
