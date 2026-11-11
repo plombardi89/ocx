@@ -93,6 +93,7 @@ hooks/pre-push            the review gate
 templates/AGENTS.md       starting point for a project's AGENTS.md
 tests/permissions.yaml    permission probes: "agent X doing Y must be allow/ask/deny"
 evals/                    fixture project, scenarios, and results (results are gitignored)
+AGENTS.md                 instructions for agents working on this repository
 cmd/ocx, internal/        Go tooling behind the Makefile
 ```
 
@@ -110,6 +111,8 @@ cmd/ocx, internal/        Go tooling behind the Makefile
 | `make verify` | `check` + every eval: the single "is everything good?" entrypoint | tokens |
 | `make sandbox` | Throwaway copy of the fixture with this config staged; opens OpenCode in it (`SCENARIO=reviewer-planted-bug` to start on a review branch) | — |
 | `make hook-install REPO=…` | Install the review gate into a repository | — |
+| `make install` / `make uninstall` | Show, or with `APPLY=1` make, the global install or its removal | — |
+| `make doctor REPOS="…"` | Check the install, what OpenCode loads, tools, and each repository's gate, `AGENTS.md`, and branch protection | free |
 
 Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run event streams, session exports, and final reports). Failing runs keep their workspace under `/tmp/opencode/ocx-eval/` for inspection.
 
@@ -192,14 +195,31 @@ Astra stays the critic: it ties Sol on quality, and using a different model at e
 
 ## Using it
 
-**Today (not installed globally):**
+### Try it without installing
 
-1. Try it: `make sandbox`, then ask build for a change and to push it.
-2. Try it on a real project: copy the project, run `go run ./cmd/ocx stage /path/to/copy` and `make hook-install REPO=/path/to/copy`, then run `opencode` there.
+1. `make sandbox` opens OpenCode in a throwaway copy of the Go fixture with this configuration staged. Ask build for a change and to push it.
+2. To try it on a real project, copy the project, run `go run ./cmd/ocx stage /path/to/copy` and `make hook-install REPO=/path/to/copy`, then run `opencode` there.
 
-**Install globally (later):** link `config/opencode.jsonc`, `config/prompts/`, `skills/`, and `commands/` into `~/.config/opencode/`, link `config/global-AGENTS.md` as `~/.config/opencode/AGENTS.md`, and run `make hook-install REPO=…` in each project. For GitHub repos, also protect `main` (require a pull request, block force pushes; private repos need GitHub Pro). A required status check that fails on new TODOs would make the TODO merge block independent of draft status.
+### Install globally
 
-**Bypassing the gate yourself:** `git push --no-verify` from your own terminal. Agents can't.
+1. `make install` shows what would change in `~/.config/opencode` (or `$XDG_CONFIG_HOME/opencode`) without changing anything.
+2. `make install APPLY=1` makes the changes. Each piece becomes a link into this checkout, so `git pull` updates the agents. A global `opencode.jsonc` that only sets `$schema` is backed up and replaced. Anything else ocx didn't create is a conflict, so you can merge your settings first; `FORCE=1` backs it up and replaces it. Backups go in `~/.config/opencode/.ocx-backups/`, which OpenCode doesn't read.
+3. In each project, run `make hook-install REPO=/path/to/project` and add an `AGENTS.md` (start from `templates/AGENTS.md`).
+4. On GitHub, protect the default branch with a ruleset that blocks deletion and force pushes and requires a pull request. Private repositories need GitHub Pro for this.
+5. Check everything with `make doctor REPOS="/path/to/project ..."`.
+
+`make uninstall APPLY=1` removes the links and restores what install backed up.
+
+### What `make doctor` checks
+
+1. Every link is in place and points into this checkout.
+2. OpenCode, started in an empty project, loads every agent with its pinned model and a non-empty prompt, and all permission probes pass against the installed configuration. A missing `prompts` link otherwise fails silently: OpenCode loads the agents with empty prompts.
+3. The tools agents rely on: a working `gh` login, `gcc` for the race detector, `shellcheck`, and a git credential helper that can actually run.
+4. For each repository: the pre-push hook is installed and current, there's an `AGENTS.md`, and GitHub protects the default branch.
+
+### Bypassing the gate yourself
+
+`git push --no-verify` from your own terminal skips the local hook. Agents can't do that, and GitHub's rules still apply.
 
 ## Conventions for adding to this repo
 
