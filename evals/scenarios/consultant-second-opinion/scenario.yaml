@@ -22,7 +22,7 @@ expect:
   verdict: HYPOTHESES
   mentions:
     - "(?i)(same name|duplicate names?|equal names?|identical names?|\\bties?\\b|\\btied\\b)"
-    - "(?i)(map iteration|random(ized)? (iteration )?order|nondetermin|non-determin|unstable|not stable|arbitrary order)"
+    - "(?i)(map iteration|random(ized)? (iteration )?order|nondetermin|non-determin|unstable|not stable|arbitrary order|unspecified|order is not guaranteed|no tie-?breaker)"
     - "(?i)\\bID\\b"
   unchanged: true
   skill_loaded: second-opinion

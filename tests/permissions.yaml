@@ -110,6 +110,11 @@ probes:
   - { agent: consultant, action: edit, resource: internal/store/store.go, expect: deny }
   - { agent: consultant, action: edit, resource: /tmp/opencode/debug/x/a.go, expect: deny }
   - { agent: consultant, action: shell, resource: "go test -count=50 ./internal/store/", expect: allow }
+  - { agent: consultant, action: shell, resource: "python3 -m unittest discover -s tests -v", expect: allow }
+  - { agent: reviewer, action: shell, resource: "python3 -m unittest discover -s tests -v", expect: allow }
+  - { agent: reviewer, action: shell, resource: "make test", expect: allow }
+  - { agent: debugger, action: shell, resource: "python3 -m unittest discover -s tests -v", expect: allow }
+  - { agent: build, action: shell, resource: "python3 -m unittest discover -s tests", expect: allow }
   - { agent: consultant, action: shell, resource: "git worktree add --detach /tmp/opencode/debug/x HEAD", expect: deny }
   - { agent: consultant, action: shell, resource: "go run ./cmd/shop", expect: deny }
   - { agent: consultant, action: skill, resource: second-opinion, expect: allow }

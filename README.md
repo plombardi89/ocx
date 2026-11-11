@@ -122,6 +122,8 @@ Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run even
 | `reviewer-round2-fixed` | Round 2: fixes plus regression tests that fail on the round-1 commit: approve |
 | `reviewer-round2-missing-test` | Round 2: correct fixes, no regression tests: request them |
 | `reviewer-round2-weak-test` | Round 2: "regression tests" that also pass on the round-1 commit: catch it by running them there |
+| `reviewer-python-planted-bug` | Python: a mutable default list shared by every product and mutated in place; the tests only ever add one product |
+| `reviewer-shell-planted-bug` | Shell: dropped `set -euo pipefail` and quoting; with spaces in a path the copy fails but the script reports success and exits 0 |
 | `reviewer-writing-rules` | Correct, tested code whose comments, test name, and doc break the writing rules: WRITING findings, and the one valid TODO listed for Phil |
 | `critic-vague-plan` | Plan with uncheckable criteria ("fast", "gracefully") and an undefined matching rule: REVISE |
 | `critic-missing-edge-cases` | Concrete plan whose own goal needs insufficient-stock, concurrency, and quantity rules it never states: REVISE |
@@ -132,7 +134,9 @@ Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run even
 | `consultant-second-opinion` | The same bug after three attempts that all looked elsewhere: the consultant must question their shared assumption |
 | `e2e-debug-flow` | build reproduces the bug, fixes it in the store with a regression test, gets it reviewed, and pushes a `fix/` branch |
 
-Scenarios can stack several commits on a branch and seed earlier review notes (`commits:` with `overlays:` and `note:`); shared material lives in `evals/scenarios/_shared/`.
+Fixtures: `go-service` (Go), `py-service` (Python, standard-library `unittest`), and `sh-tools` (bash). Each has a `make test` target, so no extra tools are needed.
+
+Scenarios can stack several commits on a branch or on main, seed earlier review notes, and layer base overlays (`base_overlays:`, `commits:` with `overlays:` and `note:`); shared material lives in `evals/scenarios/_shared/`.
 
 ## Models
 
@@ -167,6 +171,18 @@ Sol stays the reviewer: it tied Astra on quality, and it is a different family f
 3. **Claude Opus 5.5 (high)** was about 3 times faster but found that gap in only 1 of 3 runs, added 2 MINOR findings to the good plan every time, and is the same family as the driver.
 
 Astra stays the critic: it ties Sol on quality, and using a different model at each gate makes a blind spot shared by the plan critic and the reviewer less likely.
+
+### Debugger and consultant model comparison
+
+`make bakeoff TAG=debug` ran the debugger and consultant scenarios 3 times each on 3 models (18 runs, 2026-11-11). Every run found the real cause: products with the same name tie, and map iteration order breaks the tie differently on every call. One Sol run worded it as "unspecified" order, which the check didn't accept at first; the check has since been widened. Most runs also ruled out `sort.SliceStable` as a fix, several by trying it.
+
+| Role | Claude Opus 5.5 | GPT-6.1 Sol | GPT-6 Astra |
+| --- | --- | --- | --- |
+| Debugger (mean time) | 1m29s | 3m58s | 4m19s |
+| Consultant (mean time) | 33s | 2m22s | 1m35s |
+
+1. **Debugger stays on Opus:** equally correct and about 3 times faster. Build applies its fix and the reviewer, on GPT, still checks it.
+2. **Consultant stays on Sol:** Opus was faster, but a second opinion is only useful if it doesn't share the stuck agent's assumptions, and build runs on Opus.
 
 ## Permissions model
 

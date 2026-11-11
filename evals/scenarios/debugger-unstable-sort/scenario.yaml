@@ -18,7 +18,7 @@ expect:
   verdict: ROOT_CAUSE
   mentions:
     - "(?i)(same name|duplicate names?|equal names?|identical names?|\\bties?\\b|\\btied\\b)"
-    - "(?i)(map iteration|random(ized)? (iteration )?order|nondetermin|non-determin|unstable|not stable|arbitrary order)"
+    - "(?i)(map iteration|random(ized)? (iteration )?order|nondetermin|non-determin|unstable|not stable|arbitrary order|unspecified|order is not guaranteed|no tie-?breaker)"
     - "(?is)## Fix.*\\bID\\b"
     - "(?is)## Reproduction.*\\b(FAIL|fail(s|ed)?|duplicate|missing)\\b"
   unchanged: true
