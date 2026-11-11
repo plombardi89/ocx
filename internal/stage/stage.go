@@ -1,6 +1,10 @@
 // Package stage copies the ocx configuration into a project's .opencode
 // directory, so a session started there runs with these agents and skills
 // without touching the global OpenCode configuration.
+//
+// Everything staged lives in that one directory, which ignores itself. Git
+// shows no untracked files, and nothing outside it changes; in particular
+// not .git/info/exclude, which every worktree of a repository shares.
 package stage
 
 import (
@@ -8,15 +12,13 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/plombardi89/ocx/internal/config"
 )
 
 // InstructionsName is the staged copy of the global AGENTS.md. It is loaded
-// through the "instructions" setting of the generated project opencode.json.
+// through the "instructions" setting of the generated .opencode/opencode.json.
 const InstructionsName = ".opencode/ocx-instructions.md"
 
 // Options adjust the staged configuration.
@@ -32,9 +34,8 @@ func Stage(root, target string, opts Options) error {
 	if _, err := os.Stat(dotdir); err == nil {
 		return fmt.Errorf("%s already exists; stage into a fresh copy of the project", dotdir)
 	}
-	projectConfig := filepath.Join(target, "opencode.json")
-	if _, err := os.Stat(projectConfig); err == nil {
-		return fmt.Errorf("%s already exists; stage into a fresh copy of the project", projectConfig)
+	if _, err := os.Stat(filepath.Join(target, "opencode.json")); err == nil {
+		return fmt.Errorf("%s already exists; stage into a fresh copy of the project", filepath.Join(target, "opencode.json"))
 	}
 
 	copies := []struct{ src, dst string }{
@@ -67,10 +68,11 @@ func Stage(root, target string, opts Options) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(projectConfig, append(data, '\n'), 0o644); err != nil {
+	// OpenCode loads this alongside the copied opencode.jsonc.
+	if err := os.WriteFile(filepath.Join(dotdir, "opencode.json"), append(data, '\n'), 0o644); err != nil {
 		return err
 	}
-	return excludeFromGit(target, ".opencode/", "/opencode.json")
+	return os.WriteFile(filepath.Join(dotdir, ".gitignore"), []byte("*\n"), 0o644)
 }
 
 // CopyTree copies a directory tree or a single file.
@@ -113,41 +115,4 @@ func copyFile(src, dst string, mode fs.FileMode) error {
 		return err
 	}
 	return os.WriteFile(dst, data, mode.Perm())
-}
-
-// excludeFromGit adds patterns to .git/info/exclude so staged files never
-// show up as untracked changes in reviews.
-func excludeFromGit(dir string, patterns ...string) error {
-	out, err := exec.Command("git", "-C", dir, "rev-parse", "--git-path", "info/exclude").Output()
-	if err != nil {
-		return nil // not a git repository
-	}
-	path := strings.TrimSpace(string(out))
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(dir, path)
-	}
-	existing, _ := os.ReadFile(path)
-	var add []string
-	for _, p := range patterns {
-		if !strings.Contains("\n"+string(existing)+"\n", "\n"+p+"\n") {
-			add = append(add, p)
-		}
-	}
-	if len(add) == 0 {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	prefix := ""
-	if len(existing) > 0 && !strings.HasSuffix(string(existing), "\n") {
-		prefix = "\n"
-	}
-	_, err = f.WriteString(prefix + "# staged by ocx\n" + strings.Join(add, "\n") + "\n")
-	return err
 }

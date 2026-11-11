@@ -93,6 +93,8 @@ hooks/pre-push            the review gate
 templates/AGENTS.md       starting point for a project's AGENTS.md
 tests/permissions.yaml    permission probes: "agent X doing Y must be allow/ask/deny"
 evals/                    fixture project, scenarios, and results (results are gitignored)
+AGENTS.md                 instructions for agents working on this repository
+.github/workflows/        CI: make check-offline on every pull request and push to main
 cmd/ocx, internal/        Go tooling behind the Makefile
 ```
 
@@ -100,8 +102,9 @@ cmd/ocx, internal/        Go tooling behind the Makefile
 
 | Target | What it does | Cost |
 | --- | --- | --- |
-| `make check` | gofmt, vet, Go tests (incl. hook tests), config/skill/command lint, writing-rule lint, 103 permission probes against OpenCode's resolved config | free, ~seconds |
-| `make check-offline` | Same without running OpenCode | free |
+| `make check` | gofmt, vet, Go tests (incl. hook tests), the fixtures' own tests, config/skill/command lint, writing-rule lint, permission probes against OpenCode's resolved config | free, ~seconds |
+| `make check-offline` | Same without running OpenCode; CI runs this on every pull request | free |
+| `make fixtures-test` | The eval fixtures' own tests, which every scenario assumes pass before it adds its changes | free |
 | `make eval-reviewer` | Reviewer scenarios with the pinned reviewer model | tokens |
 | `make eval-critic` | Plan-critic scenarios, plus the end-to-end planning run | tokens |
 | `make eval-debug` | Debugger and consultant scenarios, plus the end-to-end debugging run | tokens |
@@ -110,6 +113,9 @@ cmd/ocx, internal/        Go tooling behind the Makefile
 | `make verify` | `check` + every eval: the single "is everything good?" entrypoint | tokens |
 | `make sandbox` | Throwaway copy of the fixture with this config staged; opens OpenCode in it (`SCENARIO=reviewer-planted-bug` to start on a review branch) | — |
 | `make hook-install REPO=…` | Install the review gate into a repository | — |
+| `make review [REPO=…]` | Run the reviewer on a repository's current commit without installing anything (`ROUND=`, `PREVIOUS=`, `PLAN=` for later rounds) | tokens |
+| `make install` / `make uninstall` | Show, or with `APPLY=1` make, the global install or its removal | — |
+| `make doctor REPOS="…"` | Check the install, what OpenCode loads, tools, and each repository's gate, `AGENTS.md`, and branch protection | free |
 
 Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run event streams, session exports, and final reports). Failing runs keep their workspace under `/tmp/opencode/ocx-eval/` for inspection.
 
@@ -192,14 +198,43 @@ Astra stays the critic: it ties Sol on quality, and using a different model at e
 
 ## Using it
 
-**Today (not installed globally):**
+### Try it without installing
 
-1. Try it: `make sandbox`, then ask build for a change and to push it.
-2. Try it on a real project: copy the project, run `go run ./cmd/ocx stage /path/to/copy` and `make hook-install REPO=/path/to/copy`, then run `opencode` there.
+1. `make sandbox` opens OpenCode in a throwaway copy of the Go fixture with this configuration staged. Ask build for a change and to push it.
+2. To try it on a real project, copy the project, run `go run ./cmd/ocx stage /path/to/copy` and `make hook-install REPO=/path/to/copy`, then run `opencode` there.
 
-**Install globally (later):** link `config/opencode.jsonc`, `config/prompts/`, `skills/`, and `commands/` into `~/.config/opencode/`, link `config/global-AGENTS.md` as `~/.config/opencode/AGENTS.md`, and run `make hook-install REPO=…` in each project. For GitHub repos, also protect `main` (require a pull request, block force pushes; private repos need GitHub Pro). A required status check that fails on new TODOs would make the TODO merge block independent of draft status.
+### Install globally
 
-**Bypassing the gate yourself:** `git push --no-verify` from your own terminal. Agents can't.
+1. `make install` shows what would change in `~/.config/opencode` (or `$XDG_CONFIG_HOME/opencode`) without changing anything.
+2. `make install APPLY=1` makes the changes. Each piece becomes a link into this checkout, so `git pull` updates the agents. A global `opencode.jsonc` that only sets `$schema` is backed up and replaced. Anything else ocx didn't create is a conflict, so you can merge your settings first; `FORCE=1` backs it up and replaces it. Backups go in `~/.config/opencode/.ocx-backups/`, which OpenCode doesn't read, and never replace earlier ones. If any step fails, install undoes the steps before it.
+3. In each project, run `make hook-install REPO=/path/to/project` and add an `AGENTS.md` (start from `templates/AGENTS.md`).
+4. On GitHub, protect the default branch with a ruleset that blocks deletion and force pushes and requires a pull request. Private repositories need GitHub Pro for this.
+5. Check everything with `make doctor REPOS="/path/to/project ..."`.
+
+`make uninstall APPLY=1` removes the links and restores what install backed up.
+
+### What `make doctor` checks
+
+1. Every link is in place and points into this checkout.
+2. OpenCode, started in an empty project, loads every agent with its pinned model and a non-empty prompt, and all permission probes pass against the installed configuration. A missing `prompts` link otherwise fails silently: OpenCode loads the agents with empty prompts. Doctor also fails if any other configuration file OpenCode loads, such as a system-wide one, sets policies, because the probes can't account for how those combine with ocx's.
+3. The tools agents rely on: a working `gh` login, `gcc` for the race detector, `shellcheck`, and a git credential helper that can actually run.
+4. For each repository: the pre-push hook is installed and current, there's an `AGENTS.md`, and GitHub protects the default branch.
+
+### Reviewing without installing
+
+`make review REPO=/path/to/project` runs the reviewer on the project's current commit without installing anything. It checks the commit out into a temporary worktree under `/tmp/opencode/ocx-review/`, stages this configuration in a `.opencode/` directory there that git ignores, and runs the reviewer headlessly. The project's own checkout is left exactly as it was. Projects that commit their own `.opencode/` or `opencode.json` can't be reviewed this way. Worktrees share git notes, so the verdict lands where the pre-push hook looks for it. Uncommitted changes aren't reviewed. It exits 0 only when the reviewer approves this exact commit; otherwise fix the findings, commit, and run the command it prints for the next round.
+
+### Bypassing the gate yourself
+
+`git push --no-verify` from your own terminal skips the local hook. Agents can't do that, and GitHub's rules still apply.
+
+## Changes to ocx itself
+
+ocx goes through its own gate:
+
+1. The pre-push hook is installed in this repository, so a commit is pushed only after the reviewer approves it. Until the global install, run the reviewer with `make review`.
+2. CI runs `make check-offline` on every pull request and every push to `main`. It skips the checks that start OpenCode; run `make check` locally for those.
+3. The "Protect main" ruleset requires a pull request and the `check` status to pass before anything merges into `main`.
 
 ## Conventions for adding to this repo
 

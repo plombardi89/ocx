@@ -42,7 +42,7 @@ func TestStage(t *testing.T) {
 			Permissions []map[string]string `json:"permissions"`
 		} `json:"agents"`
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "opencode.json"))
+	data, err := os.ReadFile(filepath.Join(dir, ".opencode", "opencode.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,15 +56,36 @@ func TestStage(t *testing.T) {
 		t.Errorf("non-interactive build rules = %v", rules)
 	}
 
-	if status, _ := gitx.Run(dir, "status", "--porcelain"); status != "" {
-		t.Errorf("staged files are not excluded from git: %q", status)
+	if _, err := os.Stat(filepath.Join(dir, "opencode.json")); err == nil {
+		t.Error("staging wrote opencode.json outside .opencode")
 	}
-	exclude, _ := os.ReadFile(filepath.Join(dir, ".git", "info", "exclude"))
-	if strings.Count(string(exclude), ".opencode/") != 1 {
-		t.Errorf("exclude file: %q", exclude)
+	if status, _ := gitx.Run(dir, "status", "--porcelain", "--untracked-files=all"); status != "" {
+		t.Errorf("staged files show up in git status: %q", status)
 	}
 
 	if err := Stage(root, dir, Options{}); err == nil {
 		t.Error("staging twice should fail rather than overwrite")
+	}
+}
+
+// Linked worktrees share .git/info/exclude, so a change there would follow
+// the author back into their own checkout.
+func TestStagingLeavesTheSharedExcludeFileAlone(t *testing.T) {
+	root, err := config.FindRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := gitx.Init(dir); err != nil {
+		t.Fatal(err)
+	}
+	excludePath := filepath.Join(dir, ".git", "info", "exclude")
+	before, _ := os.ReadFile(excludePath)
+	if err := Stage(root, dir, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(excludePath)
+	if string(after) != string(before) {
+		t.Fatalf("exclude file changed:\n%s", strings.TrimPrefix(string(after), string(before)))
 	}
 }

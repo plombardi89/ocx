@@ -597,6 +597,9 @@ func checkOwnWriting(root string) Result {
 	if data, err := os.ReadFile(filepath.Join(root, "README.md")); err == nil {
 		markdown("README.md", data)
 	}
+	if data, err := os.ReadFile(filepath.Join(root, "AGENTS.md")); err == nil {
+		markdown("AGENTS.md", data)
+	}
 
 	const coupled = "comment refers to a plan, review, or request; state the reason itself"
 	goCode := func(rel string, data []byte) {
@@ -646,7 +649,7 @@ type ResolvedAgent struct {
 // Resolve stages the configuration into a scratch project and asks a private
 // OpenCode server for the fully resolved agents.
 func Resolve(root string) (map[string]ResolvedAgent, error) {
-	dir, err := os.MkdirTemp(scratchDir(), "ocx-check-")
+	dir, err := os.MkdirTemp(ScratchDir(), "ocx-check-")
 	if err != nil {
 		return nil, err
 	}
@@ -657,17 +660,15 @@ func Resolve(root string) (map[string]ResolvedAgent, error) {
 	if err := stage.Stage(root, dir, stage.Options{}); err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, opencodeBin(), "debug", "agents", "--standalone")
-	cmd.Dir = dir
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("opencode debug agents: %w", err)
-	}
+	return ResolveIn(dir, nil)
+}
+
+// ResolveIn asks a private OpenCode server started in dir, with extra
+// environment variables env, for the fully resolved agents.
+func ResolveIn(dir string, env []string) (map[string]ResolvedAgent, error) {
 	var list []ResolvedAgent
-	if err := json.Unmarshal(out, &list); err != nil {
-		return nil, fmt.Errorf("opencode debug agents: unexpected output: %w", err)
+	if err := debugJSON(dir, env, "agents", &list); err != nil {
+		return nil, err
 	}
 	agents := map[string]ResolvedAgent{}
 	for _, a := range list {
@@ -676,7 +677,41 @@ func Resolve(root string) (map[string]ResolvedAgent, error) {
 	return agents, nil
 }
 
-func scratchDir() string {
+// ConfigSource is one configuration file or directory OpenCode loaded.
+type ConfigSource struct {
+	Type string `json:"type"` // "document" or "directory"
+	Path string `json:"path"`
+	Info struct {
+		Policies []perm.Rule `json:"policies"`
+	} `json:"info"`
+}
+
+// LoadedConfig asks a private OpenCode server started in dir, with extra
+// environment variables env, which configuration sources it loads.
+func LoadedConfig(dir string, env []string) ([]ConfigSource, error) {
+	var sources []ConfigSource
+	err := debugJSON(dir, env, "config", &sources)
+	return sources, err
+}
+
+func debugJSON(dir string, env []string, what string, v any) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, opencodeBin(), "debug", what, "--standalone")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), env...)
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("opencode debug %s: %w", what, err)
+	}
+	if err := json.Unmarshal(out, v); err != nil {
+		return fmt.Errorf("opencode debug %s: unexpected output: %w", what, err)
+	}
+	return nil
+}
+
+// ScratchDir returns the directory for ocx's temporary projects.
+func ScratchDir() string {
 	dir := filepath.Join(os.TempDir(), "opencode")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return os.TempDir()
@@ -690,6 +725,13 @@ func checkResolved(root, cfgPath string, cfg *config.Config) Result {
 	if err != nil {
 		return Result{Name: name, Status: Fail, Details: []string{err.Error(), "use --offline to skip checks that need OpenCode"}}
 	}
+	return CompareResolved(name, root, cfgPath, cfg, agents)
+}
+
+// CompareResolved checks resolved agents against the repository: every
+// configured agent is present with its model and system prompt, and every
+// permission probe gets its expected decision.
+func CompareResolved(name, root, cfgPath string, cfg *config.Config, agents map[string]ResolvedAgent) Result {
 	var problems []string
 
 	for _, id := range cfg.AgentIDs() {
@@ -707,7 +749,9 @@ func checkResolved(root, cfgPath string, cfg *config.Config) Result {
 		}
 		if f := config.SystemFile(cfgPath, a.System); f != "" {
 			want, _ := os.ReadFile(f)
-			if strings.TrimSpace(got.System) != strings.TrimSpace(string(want)) {
+			if strings.TrimSpace(got.System) == "" {
+				problems = append(problems, fmt.Sprintf("agent %s resolved with an empty system prompt; is the prompts directory missing?", id))
+			} else if strings.TrimSpace(got.System) != strings.TrimSpace(string(want)) {
 				problems = append(problems, fmt.Sprintf("agent %s: resolved system prompt does not match %s", id, f))
 			}
 		}

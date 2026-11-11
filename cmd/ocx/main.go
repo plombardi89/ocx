@@ -1,5 +1,5 @@
-// Command ocx is the toolbox for this repository: static checks, evals, sandboxes,
-// staging, and review-gate installation.
+// Command ocx is the toolbox for this repository: static checks, evals,
+// sandboxes, staging, review-gate installation, global install, and doctor.
 package main
 
 import (
@@ -13,8 +13,11 @@ import (
 
 	"github.com/plombardi89/ocx/internal/check"
 	"github.com/plombardi89/ocx/internal/config"
+	"github.com/plombardi89/ocx/internal/doctor"
 	"github.com/plombardi89/ocx/internal/eval"
 	"github.com/plombardi89/ocx/internal/hook"
+	"github.com/plombardi89/ocx/internal/install"
+	"github.com/plombardi89/ocx/internal/review"
 	"github.com/plombardi89/ocx/internal/stage"
 )
 
@@ -26,6 +29,10 @@ Usage:
   ocx sandbox [--scenario NAME]         create a throwaway project with this config staged; prints its path
   ocx stage DIR                         stage this config into DIR/.opencode (DIR must not have one)
   ocx hook install REPO                 install the pre-push review gate into REPO
+  ocx install [--apply] [--force]       link the agents, skills, and commands into OpenCode's global config
+  ocx uninstall [--apply]               remove those links and restore what install backed up
+  ocx doctor [--offline] [REPO...]      check the install, OpenCode, tools, and each repo's gate and branch protection
+  ocx review [--repo DIR] [flags]       run the independent reviewer on a repo's current commit; exits 0 only on approval
 
 Run "ocx <command> -h" for flags.
 `
@@ -51,6 +58,14 @@ func main() {
 		err = runStage(root, args)
 	case "hook":
 		err = runHook(root, args)
+	case "install":
+		err = runInstall(root, args)
+	case "uninstall":
+		err = runUninstall(args)
+	case "doctor":
+		err = runDoctor(root, args)
+	case "review":
+		err = runReview(root, args)
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
@@ -73,8 +88,12 @@ func runCheck(root string, args []string) error {
 	offline := fs.Bool("offline", false, "skip checks that run opencode")
 	_ = fs.Parse(args)
 
+	return printResults(check.Run(root, check.Options{Offline: *offline}))
+}
+
+func printResults(results []check.Result) error {
 	failed := 0
-	for _, r := range check.Run(root, check.Options{Offline: *offline}) {
+	for _, r := range results {
 		fmt.Printf("%-4s  %s\n", r.Status, r.Name)
 		for _, d := range r.Details {
 			for _, line := range strings.Split(d, "\n") {
@@ -140,7 +159,7 @@ func runEval(root string, args []string) error {
 		Parallel: *parallel,
 		Keep:     *keep,
 		OutDir:   *out,
-		WorkDir:  filepath.Join(scratchDir(), "ocx-eval", stamp),
+		WorkDir:  filepath.Join(check.ScratchDir(), "ocx-eval", stamp),
 		Log: func(format string, a ...any) {
 			fmt.Printf("%s  "+format+"\n", append([]any{time.Now().Format("15:04:05")}, a...)...)
 		},
@@ -175,12 +194,6 @@ func runEval(root string, args []string) error {
 	return nil
 }
 
-func scratchDir() string {
-	dir := filepath.Join(os.TempDir(), "opencode")
-	_ = os.MkdirAll(dir, 0o755)
-	return dir
-}
-
 func runSandbox(root string, args []string) error {
 	fs := flag.NewFlagSet("sandbox", flag.ExitOnError)
 	name := fs.String("scenario", "", "check out this scenario's branch (default: plain fixture on main)")
@@ -203,7 +216,7 @@ func runSandbox(root string, args []string) error {
 			return fmt.Errorf("unknown scenario %q", *name)
 		}
 	}
-	dir, err := os.MkdirTemp(scratchDir(), "ocx-sandbox-")
+	dir, err := os.MkdirTemp(check.ScratchDir(), "ocx-sandbox-")
 	if err != nil {
 		return err
 	}
@@ -222,7 +235,7 @@ func runStage(root string, args []string) error {
 	if err := stage.Stage(root, args[0], stage.Options{}); err != nil {
 		return err
 	}
-	fmt.Printf("staged into %s/.opencode (remove .opencode/ and opencode.json to undo)\n", args[0])
+	fmt.Printf("staged into %s/.opencode (remove it to undo)\n", args[0])
 	return nil
 }
 
@@ -235,5 +248,134 @@ func runHook(root string, args []string) error {
 		return err
 	}
 	fmt.Println("installed", path)
+	return nil
+}
+
+func configDirFlag(fs *flag.FlagSet) *string {
+	return fs.String("config-dir", "", "OpenCode's global configuration directory (default: $XDG_CONFIG_HOME/opencode or ~/.config/opencode)")
+}
+
+func resolveConfigDir(flagValue string) (string, error) {
+	if flagValue != "" {
+		return filepath.Abs(flagValue)
+	}
+	return install.ConfigDir()
+}
+
+func runInstall(root string, args []string) error {
+	fs := flag.NewFlagSet("install", flag.ExitOnError)
+	apply := fs.Bool("apply", false, "make the changes (default: only show them)")
+	force := fs.Bool("force", false, "back up and replace files that ocx didn't create")
+	dirFlag := configDirFlag(fs)
+	_ = fs.Parse(args)
+
+	dir, err := resolveConfigDir(*dirFlag)
+	if err != nil {
+		return err
+	}
+	p, err := install.PlanInstall(root, dir, *force)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Install %s into %s:\n\n%s\n", root, dir, p.Describe())
+	if len(p.Conflicts) > 0 {
+		return errors.New("resolve the conflicts above, or rerun with --force to back up and replace those files")
+	}
+	if !p.Changes() {
+		fmt.Println("Already installed; nothing to do.")
+		return nil
+	}
+	if !*apply {
+		fmt.Println("Dry run: nothing changed. Rerun with --apply (make install APPLY=1) to make these changes.")
+		return nil
+	}
+	if err := install.Apply(p, time.Now()); err != nil {
+		return err
+	}
+	fmt.Printf("Installed. Backups, if any, are in %s. Check it with: make doctor\n", filepath.Join(dir, install.BackupDir))
+	return nil
+}
+
+func runUninstall(args []string) error {
+	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
+	apply := fs.Bool("apply", false, "make the changes (default: only show them)")
+	dirFlag := configDirFlag(fs)
+	_ = fs.Parse(args)
+
+	dir, err := resolveConfigDir(*dirFlag)
+	if err != nil {
+		return err
+	}
+	steps, err := install.Uninstall(dir, *apply)
+	for _, s := range steps {
+		fmt.Println(s)
+	}
+	if err != nil {
+		return err
+	}
+	if !*apply {
+		fmt.Println("\nDry run: nothing changed. Rerun with --apply (make uninstall APPLY=1) to make these changes.")
+	}
+	return nil
+}
+
+func runDoctor(root string, args []string) error {
+	fs := flag.NewFlagSet("doctor", flag.ExitOnError)
+	offline := fs.Bool("offline", false, "skip checks that run opencode or call GitHub")
+	dirFlag := configDirFlag(fs)
+	_ = fs.Parse(args)
+
+	dir, err := resolveConfigDir(*dirFlag)
+	if err != nil {
+		return err
+	}
+	var repos []string
+	for _, r := range fs.Args() {
+		abs, err := filepath.Abs(r)
+		if err != nil {
+			return err
+		}
+		repos = append(repos, abs)
+	}
+	return printResults(doctor.Run(doctor.Options{Root: root, ConfigDir: dir, Repos: repos, Offline: *offline}))
+}
+
+func runReview(root string, args []string) error {
+	fs := flag.NewFlagSet("review", flag.ExitOnError)
+	repo := fs.String("repo", ".", "repository whose current commit to review")
+	plan := fs.String("plan", "", "plan file, relative to the repository")
+	round := fs.Int("round", 1, "review round")
+	previous := fs.String("previous", "", "full sha of the head reviewed in the previous round")
+	model := fs.String("model", "", "override the reviewer's pinned model")
+	_ = fs.Parse(args)
+
+	abs, err := filepath.Abs(*repo)
+	if err != nil {
+		return err
+	}
+	o, err := review.Run(review.Options{
+		Root: root, Repo: abs, Plan: *plan, Round: *round, PreviousReview: *previous, Model: *model,
+		Log: func(format string, a ...any) { fmt.Fprintf(os.Stderr, "ocx: "+format+"\n", a...) },
+	})
+	if o != nil && o.Report != "" {
+		fmt.Println(o.Report)
+	}
+	if err != nil {
+		if o != nil && o.EventsPath != "" {
+			fmt.Fprintf(os.Stderr, "ocx: events: %s\n", o.EventsPath)
+		}
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "\nocx: reviewed %s in %s; note: %s\n", o.Head[:7], o.Duration.Round(time.Second), o.NoteFirstLine)
+	if !o.Approved() {
+		next := fmt.Sprintf("make review ROUND=%d PREVIOUS=%s", *round+1, o.Head)
+		if abs != root {
+			next += " REPO=" + abs
+		}
+		if *plan != "" {
+			next += " PLAN=" + *plan
+		}
+		return fmt.Errorf("not approved (%s); fix the findings, commit, and run the next round: %s", o.Verdict, next)
+	}
 	return nil
 }

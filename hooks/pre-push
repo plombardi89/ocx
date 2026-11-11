@@ -21,7 +21,7 @@ fail() {
 	status=1
 }
 
-while read -r local_ref local_sha remote_ref remote_sha; do
+while read -r local_ref local_sha remote_ref _; do
 	[ -n "$local_ref" ] || continue
 
 	case "$remote_ref" in
