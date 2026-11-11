@@ -1,10 +1,12 @@
 OCX := go run ./cmd/ocx
 
-# Bake-off: reviewer candidates and repetitions (override on the command line).
+# Bake-off: candidate models and repetitions for one tag's scenarios
+# (override on the command line, e.g. make bakeoff TAG=critic).
+TAG ?= reviewer
 BAKEOFF_MODELS ?= github-copilot/gpt-6.1-sol\#xhigh,github-copilot/gpt-6-astra\#high,github-copilot/claude-opus-5.5\#high
 REPS ?= 3
 
-.PHONY: help check check-offline test eval eval-reviewer eval-e2e bakeoff verify sandbox hook-install fmt
+.PHONY: help check check-offline test eval eval-reviewer eval-critic eval-e2e bakeoff verify sandbox hook-install fmt
 
 help: ## Show targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
@@ -26,11 +28,14 @@ eval: ## Run every eval scenario (uses model tokens; ARGS="..." passes flags to 
 eval-reviewer: ## Run the reviewer scenarios with the pinned reviewer model
 	$(OCX) eval --tag reviewer $(ARGS)
 
-eval-e2e: ## Run the end-to-end build -> review -> push scenario
+eval-critic: ## Run the plan-critic scenarios, including the end-to-end planning run
+	$(OCX) eval --tag critic $(ARGS)
+
+eval-e2e: ## Run the end-to-end scenarios (review gate and planning flow)
 	$(OCX) eval --tag e2e $(ARGS)
 
-bakeoff: ## Compare reviewer models: BAKEOFF_MODELS=... REPS=...
-	$(OCX) eval --tag reviewer --models '$(BAKEOFF_MODELS)' --reps $(REPS) $(ARGS)
+bakeoff: ## Compare models on one tag's scenarios: TAG=reviewer|critic BAKEOFF_MODELS=... REPS=...
+	$(OCX) eval --tag $(TAG) --models '$(BAKEOFF_MODELS)' --reps $(REPS) $(ARGS)
 
 verify: check eval ## Everything: checks, then all evals
 

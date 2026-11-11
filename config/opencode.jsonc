@@ -5,9 +5,10 @@
   // All model choices live in this file. Change a role's model on its agent
   // below; `make check` validates every reference. Rationale is in README.md.
   //
-  //   driver    github-copilot/claude-opus-5.5        session default (you drive with it)
-  //   reviewer  github-copilot/gpt-6.1-sol#xhigh      other family than the driver, on purpose
-  //   search    github-copilot/claude-haiku-5.5       built-in explore subagent
+  //   driver       github-copilot/claude-opus-5.5        session default (you drive with it)
+  //   reviewer     github-copilot/gpt-6.1-sol#xhigh      other family than the driver, on purpose
+  //   plan-critic  github-copilot/gpt-6-astra#high       other family than the driver, on purpose
+  //   search       github-copilot/claude-haiku-5.5       built-in explore subagent
   //
   // MAI models are never used; `make check` fails if one is referenced.
   "model": "github-copilot/claude-opus-5.5",
@@ -103,7 +104,8 @@
     // Only these subagents may be launched.
     { "action": "subagent", "resource": "*", "effect": "deny" },
     { "action": "subagent", "resource": "explore", "effect": "allow" },
-    { "action": "subagent", "resource": "reviewer", "effect": "allow" }
+    { "action": "subagent", "resource": "reviewer", "effect": "allow" },
+    { "action": "subagent", "resource": "plan-critic", "effect": "allow" }
   ],
 
   // ── Hard blocks (policies) ──────────────────────────────────────────────
@@ -182,6 +184,44 @@
     // Built-in read-only search subagent: same accuracy on code search, faster.
     "explore": {
       "model": "github-copilot/claude-haiku-5.5"
+    },
+
+    "plan-critic": {
+      "description": "Independent, adversarial critic of implementation plans. Launch it after drafting or revising a plan in docs/plans, before implementing. Give it only the 'Plan review request' fields (repository, plan, round); it reads the plan and the code itself and returns APPROVE or REVISE.",
+      "mode": "subagent",
+      "model": "github-copilot/gpt-6-astra#high",
+      "color": "#7c3aed",
+      "system": "{file:./prompts/plan-critic.md}",
+      "permissions": [
+        { "action": "*", "resource": "*", "effect": "deny" },
+
+        { "action": "read", "resource": "*", "effect": "allow" },
+        { "action": "glob", "resource": "*", "effect": "allow" },
+        { "action": "grep", "resource": "*", "effect": "allow" },
+        { "action": "read", "resource": "*.env", "effect": "deny" },
+        { "action": "read", "resource": "*.env.*", "effect": "deny" },
+        { "action": "read", "resource": "*.env.example", "effect": "allow" },
+        { "action": "read", "resource": "*.pem", "effect": "deny" },
+        { "action": "read", "resource": "*/.ssh/*", "effect": "deny" },
+        { "action": "external_directory", "resource": "~/go/pkg/mod/*", "effect": "allow" },
+        { "action": "external_directory", "resource": "~/.config/opencode/skills/*", "effect": "allow" },
+
+        { "action": "skill", "resource": "plan-critique", "effect": "allow" },
+        { "action": "skill", "resource": "writing-style", "effect": "allow" },
+
+        { "action": "shell", "resource": "git status *", "effect": "allow" },
+        { "action": "shell", "resource": "git diff *", "effect": "allow" },
+        { "action": "shell", "resource": "git log *", "effect": "allow" },
+        { "action": "shell", "resource": "git show *", "effect": "allow" },
+        { "action": "shell", "resource": "git rev-parse *", "effect": "allow" },
+        { "action": "shell", "resource": "git blame *", "effect": "allow" },
+        { "action": "shell", "resource": "git ls-files *", "effect": "allow" },
+        { "action": "shell", "resource": "git branch --show-current", "effect": "allow" },
+        { "action": "shell", "resource": "go list *", "effect": "allow" },
+        { "action": "shell", "resource": "go doc *", "effect": "allow" },
+        { "action": "shell", "resource": "ls *", "effect": "allow" },
+        { "action": "shell", "resource": "wc *", "effect": "allow" }
+      ]
     },
 
     "reviewer": {

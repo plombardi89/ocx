@@ -134,7 +134,10 @@ func Run(opts Options) ([]Result, error) {
 	var jobs []job
 	for _, s := range scenarios {
 		overrides := []string{""}
-		if s.Bakeoff && len(opts.Models) > 0 {
+		if len(opts.Models) > 0 {
+			if !s.Bakeoff {
+				continue
+			}
 			overrides = opts.Models
 		}
 		for _, m := range overrides {
@@ -142,6 +145,9 @@ func Run(opts Options) ([]Result, error) {
 				jobs = append(jobs, job{scenario: s, override: m, rep: rep})
 			}
 		}
+	}
+	if len(jobs) == 0 {
+		return nil, fmt.Errorf("no runs: none of the selected scenarios are bakeoff scenarios")
 	}
 
 	results := make([]Result, len(jobs))

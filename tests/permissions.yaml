@@ -58,6 +58,28 @@ probes:
   - { agent: reviewer, action: shell, resource: "git checkout -- internal/store/store.go", expect: deny }
   - { agent: reviewer, action: shell, resource: "git switch -c review", expect: deny }
 
+  # plan-critic: read-only; reads the plan and the code, nothing else
+  - { agent: plan-critic, action: read, resource: docs/plans/0006-search.md, expect: allow }
+  - { agent: plan-critic, action: read, resource: internal/store/store.go, expect: allow }
+  - { agent: plan-critic, action: read, resource: .env, expect: deny }
+  - { agent: plan-critic, action: edit, resource: docs/plans/0006-search.md, expect: deny }
+  - { agent: plan-critic, action: edit, resource: /tmp/opencode/reviews/x/a.go, expect: deny }
+  - { agent: plan-critic, action: shell, resource: "git log --oneline -5", expect: allow }
+  - { agent: plan-critic, action: shell, resource: "go doc ./internal/store", expect: allow }
+  - { agent: plan-critic, action: shell, resource: "go test ./...", expect: deny }
+  - { agent: plan-critic, action: shell, resource: "git commit -m x", expect: deny }
+  - { agent: plan-critic, action: shell, resource: "git notes --ref=ocreview add -m forged HEAD", expect: deny }
+  - { agent: plan-critic, action: shell, resource: "git worktree add --detach /tmp/opencode/reviews/x HEAD", expect: deny }
+  - { agent: plan-critic, action: skill, resource: plan-critique, expect: allow }
+  - { agent: plan-critic, action: skill, resource: writing-style, expect: allow }
+  - { agent: plan-critic, action: skill, resource: code-review, expect: deny }
+  - { agent: plan-critic, action: subagent, resource: reviewer, expect: deny }
+  - { agent: plan-critic, action: question, resource: "*", expect: deny }
+  - { agent: plan-critic, action: webfetch, resource: "https://example.com", expect: deny }
+  - { agent: plan-critic, action: external_directory, resource: "/tmp/opencode/reviews/x/*", expect: deny }
+  - { agent: build, action: subagent, resource: plan-critic, expect: allow }
+  - { agent: reviewer, action: subagent, resource: plan-critic, expect: deny }
+
   # build: implements, commits, pushes feature branches; never main, never notes
   - { agent: build, action: edit, resource: internal/store/store.go, expect: allow }
   - { agent: build, action: edit, resource: .git/hooks/pre-push, expect: deny }

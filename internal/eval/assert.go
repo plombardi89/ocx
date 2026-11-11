@@ -12,19 +12,20 @@ import (
 )
 
 var (
-	summaryLine      = regexp.MustCompile(`OCREVIEW verdict=(\S+) spec=(\S+) quality=(\S+) blockers=(\d+) majors=(\d+)(?: writing=(\d+))? minors=(\d+) nits=(\d+) head=([0-9a-f]+)`)
+	summaryLine      = regexp.MustCompile(`OC(REVIEW|PLAN) verdict=(\S+)(?: spec=(\S+) quality=(\S+))? blockers=(\d+) majors=(\d+)(?: writing=(\d+))? minors=(\d+) nits=(\d+)(?: head=([0-9a-f]+))?`)
 	noteLine         = regexp.MustCompile(`^ocreview: verdict=(\S+) .*head=([0-9a-f]+)`)
 	executedEvidence = regexp.MustCompile(`(?i)evidence \(executed\)`)
 	patchFileHeader  = regexp.MustCompile(`(?m)^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$`)
 )
 
-// reviewSummary is the reviewer's OCREVIEW summary line.
+// reviewSummary is the OCREVIEW line of a code review or the OCPLAN line of
+// a plan critique. Plan critiques have no spec, quality, or head fields.
 type reviewSummary struct {
-	Line, Verdict, Spec, Quality, Head      string
-	Blockers, Majors, Writing, Minors, Nits int
+	Line, Kind, Verdict, Spec, Quality, Head string
+	Blockers, Majors, Writing, Minors, Nits  int
 }
 
-// parseSummary returns the last OCREVIEW summary line in text.
+// parseSummary returns the last OCREVIEW or OCPLAN summary line in text.
 func parseSummary(text string) (reviewSummary, bool) {
 	all := summaryLine.FindAllStringSubmatch(text, -1)
 	if len(all) == 0 {
@@ -36,9 +37,9 @@ func parseSummary(text string) (reviewSummary, bool) {
 		return v
 	}
 	return reviewSummary{
-		Line: m[0], Verdict: m[1], Spec: m[2], Quality: m[3],
-		Blockers: n(m[4]), Majors: n(m[5]), Writing: n(m[6]), Minors: n(m[7]), Nits: n(m[8]),
-		Head: m[9],
+		Line: m[0], Kind: "OC" + m[1], Verdict: m[2], Spec: m[3], Quality: m[4],
+		Blockers: n(m[5]), Majors: n(m[6]), Writing: n(m[7]), Minors: n(m[8]), Nits: n(m[9]),
+		Head: m[10],
 	}, true
 }
 
@@ -93,11 +94,20 @@ func (a *asserter) run(e Expect) []Check {
 	if e.Verdict != "" {
 		switch {
 		case !hasSummary:
-			add("verdict "+e.Verdict, false, "no OCREVIEW summary line in the final message")
+			add("verdict "+e.Verdict, false, "no OCREVIEW or OCPLAN summary line in the final message")
 		default:
 			add("verdict "+e.Verdict, a.verdict == e.Verdict, "got %s", a.verdict)
-			add("summary names head", summary.Head == a.ws.Head, "summary head=%s, want %s", summary.Head, a.ws.Head)
+			if summary.Kind == "OCREVIEW" {
+				add("summary names head", summary.Head == a.ws.Head, "summary head=%s, want %s", summary.Head, a.ws.Head)
+			}
 		}
+	}
+
+	if e.MinBlockers > 0 {
+		add(fmt.Sprintf("at least %d BLOCKER findings", e.MinBlockers), summary.Blockers >= e.MinBlockers, "summary reports blockers=%d", summary.Blockers)
+	}
+	if e.MinMajors > 0 {
+		add(fmt.Sprintf("at least %d MAJOR findings", e.MinMajors), summary.Majors >= e.MinMajors, "summary reports majors=%d", summary.Majors)
 	}
 
 	if e.MinWriting > 0 {
@@ -235,22 +245,48 @@ func (a *asserter) e2e(e E2E) []Check {
 		add("added comments stand on their own", len(hits) == 0, "%q", hits)
 	}
 
+	if len(e.ChangedOnly) > 0 || e.ChangedMin > 0 {
+		changed := a.changedFiles()
+		var outside []string
+		for _, f := range changed {
+			allowed := len(e.ChangedOnly) == 0
+			for _, g := range e.ChangedOnly {
+				if ok, _ := filepath.Match(g, f); ok {
+					allowed = true
+				}
+			}
+			if !allowed {
+				outside = append(outside, f)
+			}
+		}
+		if len(e.ChangedOnly) > 0 {
+			add(fmt.Sprintf("changed only %v", e.ChangedOnly), len(outside) == 0, "also changed %v", outside)
+		}
+		if e.ChangedMin > 0 {
+			add(fmt.Sprintf("changed at least %d file(s)", e.ChangedMin), len(changed) >= e.ChangedMin, "changed %v", changed)
+		}
+	}
+
+	agent := e.DispatchAgent
+	if agent == "" {
+		agent = "reviewer"
+	}
 	var dispatches []Part
 	for _, p := range a.tr.ToolCalls("subagent") {
-		if p.State != nil && p.State.Input["agent"] == "reviewer" {
+		if p.State != nil && p.State.Input["agent"] == agent {
 			dispatches = append(dispatches, p)
 		}
 	}
-	if e.ReviewerDispatchMin > 0 {
-		add(fmt.Sprintf("reviewer launched at least %d time(s)", e.ReviewerDispatchMin), len(dispatches) >= e.ReviewerDispatchMin, "launched %d time(s)", len(dispatches))
+	if e.DispatchMin > 0 {
+		add(fmt.Sprintf("%s launched at least %d time(s)", agent, e.DispatchMin), len(dispatches) >= e.DispatchMin, "launched %d time(s)", len(dispatches))
 	}
 	want := ""
-	if r, ok := a.cfg.Agents["reviewer"]; ok {
+	if r, ok := a.cfg.Agents[agent]; ok {
 		want = r.Model
 	}
 	for i, p := range dispatches {
 		prompt, _ := p.State.Input["prompt"].(string)
-		name := fmt.Sprintf("dispatch %d", i+1)
+		name := fmt.Sprintf("%s dispatch %d", agent, i+1)
 		if e.DispatchPrefix != "" {
 			add(name+" uses the request template", strings.HasPrefix(strings.TrimSpace(prompt), e.DispatchPrefix), "prompt starts %q", truncate(prompt, 60))
 		}
@@ -267,16 +303,35 @@ func (a *asserter) e2e(e E2E) []Check {
 			add(name+" child session found", false, "child=%q", child)
 			continue
 		}
-		exp, err := ExportSession(a.ctx, a.ws.Work, child, filepath.Join(a.outDir, fmt.Sprintf("reviewer-%d.json", i+1)))
+		exp, err := ExportSession(a.ctx, a.ws.Work, child, filepath.Join(a.outDir, fmt.Sprintf("%s-%d.json", agent, i+1)))
 		if err != nil {
 			add(name+" export", false, "%v", err)
 			continue
 		}
-		c := checkModel(exp, "reviewer", want)
+		c := checkModel(exp, agent, want)
 		c.Name = name + " " + c.Name
 		checks = append(checks, c)
 	}
 	return checks
+}
+
+// changedFiles lists files that differ from the workspace's base commit,
+// whether committed, modified, or new. Staged configuration is excluded by
+// .git/info/exclude.
+func (a *asserter) changedFiles() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(list string) {
+		for _, f := range strings.Split(list, "\n") {
+			if f != "" && !seen[f] {
+				seen[f] = true
+				out = append(out, f)
+			}
+		}
+	}
+	add(gitOut(a.ws.Work, "diff", "--name-only", a.ws.Base))
+	add(gitOut(a.ws.Work, "ls-files", "--others", "--exclude-standard"))
+	return out
 }
 
 func firstLine(s string) string {

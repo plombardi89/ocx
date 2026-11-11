@@ -1,0 +1,22 @@
+name: critic-missing-edge-cases
+description: Concrete stock-reservation plan whose goal ("two customers can't buy the last item") needs insufficient-stock, concurrency, and quantity rules it never states; the critic must find them.
+fixture: go-service
+tags: [critic]
+agent: plan-critic
+bakeoff: true
+branch: feat/stock-reservations
+commit_message: "docs: plan stock reservations"
+prompt: |
+  Plan review request
+  Repository: {{.Repo}}
+  Plan: docs/plans/0007-stock-reservations.md
+  Round: 1
+expect:
+  verdict: REVISE
+  mentions:
+    - "(?i)(concurren|simultaneous|at the same time|race|atomic|two customers|oversell)"
+    - "(?i)(insufficient|not enough|exceeds|more than (the )?(available |current )?stock|stock is (lower|less|smaller)|below the requested)"
+    - "(?i)(zero|negative|non-positive|quantity of 0|qty < 1|quantity < 1|invalid quantit)"
+  unchanged: true
+  skill_loaded: plan-critique
+  edits_in_scratch_only: true

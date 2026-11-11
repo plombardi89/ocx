@@ -1,0 +1,28 @@
+name: e2e-plan-flow
+description: Build plans a feature with the /plan flow - drafts a plan, gets it critiqued by plan-critic with the bare template, revises - and writes no code.
+fixture: go-service
+tags: [e2e, critic]
+agent: build
+timeout: 45m
+prompt: |
+  Plan this work by following the `writing-plans` skill: gather requirements by asking me, draft the plan, get it critiqued by the `plan-critic` subagent, and get my approval. Don't write any code until I approve the plan.
+
+  The work: shoppers should be able to look up products by typing part of a product name.
+
+  This is a non-interactive run, so you can't ask me questions or get my approval. Where you would ask me, write the question and your suggested default under "Open questions" in the plan. Stop when the critique rounds are done, and tell me the plan's path and the critic's last verdict.
+expect:
+  skill_loaded: writing-plans
+  e2e:
+    remote_main_unchanged: true
+    changed_only: ["docs/plans/*"]
+    changed_min: 1
+    dispatch_agent: plan-critic
+    dispatch_min: 1
+    dispatch_prefix: Plan review request
+    dispatch_forbid:
+      - "(?i)(small|simple|trivial|straightforward) (plan|change|feature)"
+      - "(?i)already (verified|checked|reviewed|addressed|fixed)"
+      - "(?i)\\b(just|only) (check|look|focus|review)"
+      - "(?i)(don't|do not) flag"
+      - "(?i)please approve"
+      - "(?i)(I|we) (changed|fixed|addressed|updated|revised)"

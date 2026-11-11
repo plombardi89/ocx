@@ -75,6 +75,10 @@ type Expect struct {
 	ExecutedEvidence bool `yaml:"executed_evidence"`
 	// MinWriting requires at least this many WRITING findings.
 	MinWriting int `yaml:"min_writing"`
+	// MinBlockers and MinMajors require at least this many BLOCKER and
+	// MAJOR findings.
+	MinBlockers int `yaml:"min_blockers"`
+	MinMajors   int `yaml:"min_majors"`
 	// Note requires a review note on Head whose verdict matches the report.
 	Note bool `yaml:"note"`
 	// Unchanged requires a clean worktree, an unmoved HEAD, and no leftover
@@ -90,15 +94,23 @@ type Expect struct {
 
 // E2E holds assertions for end-to-end scenarios where build does the work.
 type E2E struct {
-	PushedBranchPrefix  string   `yaml:"pushed_branch_prefix"`
-	RemoteMainUnchanged bool     `yaml:"remote_main_unchanged"`
-	PushedHeadApproved  bool     `yaml:"pushed_head_approved"`
-	ReviewerDispatchMin int      `yaml:"reviewer_dispatch_min"`
-	DispatchPrefix      string   `yaml:"dispatch_prefix"`
-	DispatchForbid      []string `yaml:"dispatch_forbid"`
+	PushedBranchPrefix  string `yaml:"pushed_branch_prefix"`
+	RemoteMainUnchanged bool   `yaml:"remote_main_unchanged"`
+	PushedHeadApproved  bool   `yaml:"pushed_head_approved"`
+	// DispatchAgent is the subagent whose launches are checked (default
+	// reviewer): at least DispatchMin launches, each prompt starting with
+	// DispatchPrefix and matching none of DispatchForbid, on its pinned model.
+	DispatchAgent  string   `yaml:"dispatch_agent"`
+	DispatchMin    int      `yaml:"dispatch_min"`
+	DispatchPrefix string   `yaml:"dispatch_prefix"`
+	DispatchForbid []string `yaml:"dispatch_forbid"`
 	// CommentForbid are regular expressions that no added "//" line in the
 	// pushed branches may match.
 	CommentForbid []string `yaml:"comment_forbid"`
+	// ChangedOnly are path globs every file changed since Base must match;
+	// ChangedMin is the least number of changed files.
+	ChangedOnly []string `yaml:"changed_only"`
+	ChangedMin  int      `yaml:"changed_min"`
 }
 
 // TimeoutDuration returns the scenario timeout, defaulting to 30 minutes.
@@ -199,13 +211,20 @@ func (s Scenario) Validate(root string) error {
 			errs = append(errs, fmt.Errorf("%s: timeout: %w", prefix, err))
 		}
 	}
-	if v := s.Expect.Verdict; v != "" && v != "APPROVE" && v != "REQUEST_CHANGES" {
-		errs = append(errs, fmt.Errorf("%s: verdict must be APPROVE or REQUEST_CHANGES", prefix))
+	switch s.Expect.Verdict {
+	case "", "APPROVE", "REQUEST_CHANGES", "REVISE":
+	default:
+		errs = append(errs, fmt.Errorf("%s: verdict must be APPROVE, REQUEST_CHANGES, or REVISE", prefix))
 	}
 	patterns := append([]string{}, s.Expect.Mentions...)
 	if s.Expect.E2E != nil {
 		patterns = append(patterns, s.Expect.E2E.DispatchForbid...)
 		patterns = append(patterns, s.Expect.E2E.CommentForbid...)
+		for _, g := range s.Expect.E2E.ChangedOnly {
+			if _, err := filepath.Match(g, ""); err != nil {
+				errs = append(errs, fmt.Errorf("%s: bad glob %q: %w", prefix, g, err))
+			}
+		}
 	}
 	for _, p := range patterns {
 		if _, err := regexp.Compile(p); err != nil {
