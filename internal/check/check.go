@@ -1,4 +1,4 @@
-// Package check validates the ocagents sources: configuration, agents,
+// Package check validates the ocx sources: configuration, agents,
 // skills, commands, the review gate, eval scenarios, and (with OpenCode
 // available) the fully resolved permissions of every agent.
 package check
@@ -19,11 +19,12 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"ocagents/internal/config"
-	"ocagents/internal/eval"
-	"ocagents/internal/gitx"
-	"ocagents/internal/perm"
-	"ocagents/internal/stage"
+	"github.com/plombardi89/ocx/internal/config"
+	"github.com/plombardi89/ocx/internal/eval"
+	"github.com/plombardi89/ocx/internal/gitx"
+	"github.com/plombardi89/ocx/internal/hook"
+	"github.com/plombardi89/ocx/internal/perm"
+	"github.com/plombardi89/ocx/internal/stage"
 )
 
 // Status values for a Result.
@@ -486,8 +487,8 @@ func checkHook(root string) Result {
 		return result("pre-push hook", []string{err.Error()})
 	}
 	var problems []string
-	if !strings.Contains(string(data), "ocagents-managed-hook") {
-		problems = append(problems, "hook is missing the ocagents-managed-hook marker")
+	if !strings.Contains(string(data), hook.Marker) {
+		problems = append(problems, "hook is missing the "+hook.Marker+" marker")
 	}
 	if out, err := exec.Command("sh", "-n", path).CombinedOutput(); err != nil {
 		problems = append(problems, "sh -n: "+strings.TrimSpace(string(out)))

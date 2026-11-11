@@ -1,4 +1,4 @@
-// Package stage copies the ocagents configuration into a project's .opencode
+// Package stage copies the ocx configuration into a project's .opencode
 // directory, so a session started there runs with these agents and skills
 // without touching the global OpenCode configuration.
 package stage
@@ -12,12 +12,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ocagents/internal/config"
+	"github.com/plombardi89/ocx/internal/config"
 )
 
 // InstructionsName is the staged copy of the global AGENTS.md. It is loaded
 // through the "instructions" setting of the generated project opencode.json.
-const InstructionsName = ".opencode/ocagents-instructions.md"
+const InstructionsName = ".opencode/ocx-instructions.md"
 
 // Options adjust the staged configuration.
 type Options struct {
@@ -26,7 +26,7 @@ type Options struct {
 	NonInteractive bool
 }
 
-// Stage copies the configuration from the ocagents root into target.
+// Stage copies the configuration from the ocx root into target.
 func Stage(root, target string, opts Options) error {
 	dotdir := filepath.Join(target, ".opencode")
 	if _, err := os.Stat(dotdir); err == nil {
@@ -148,6 +148,6 @@ func excludeFromGit(dir string, patterns ...string) error {
 	if len(existing) > 0 && !strings.HasSuffix(string(existing), "\n") {
 		prefix = "\n"
 	}
-	_, err = f.WriteString(prefix + "# staged by ocagents\n" + strings.Join(add, "\n") + "\n")
+	_, err = f.WriteString(prefix + "# staged by ocx\n" + strings.Join(add, "\n") + "\n")
 	return err
 }

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ocagents/internal/config"
+	"github.com/plombardi89/ocx/internal/config"
 )
 
 var (

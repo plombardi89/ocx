@@ -1,4 +1,4 @@
-// Package gitx runs git commands for ocagents tooling with the user's global
+// Package gitx runs git commands for ocx tooling with the user's global
 // and system git configuration ignored, so results do not depend on the
 // machine's settings.
 package gitx
@@ -47,8 +47,8 @@ func RunInput(dir, input string, args ...string) (string, error) {
 func Init(dir string) error {
 	steps := [][]string{
 		{"init", "-q", "-b", "main"},
-		{"config", "user.name", "ocagents eval"},
-		{"config", "user.email", "eval@ocagents.invalid"},
+		{"config", "user.name", "ocx eval"},
+		{"config", "user.email", "eval@ocx.invalid"},
 		{"config", "commit.gpgsign", "false"},
 		{"config", "tag.gpgsign", "false"},
 	}

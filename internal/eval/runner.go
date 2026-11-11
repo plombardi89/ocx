@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"ocagents/internal/config"
-	"ocagents/internal/gitx"
-	"ocagents/internal/stage"
+	"github.com/plombardi89/ocx/internal/config"
+	"github.com/plombardi89/ocx/internal/gitx"
+	"github.com/plombardi89/ocx/internal/stage"
 )
 
 // Options select and configure an eval run.

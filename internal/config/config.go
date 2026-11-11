@@ -1,4 +1,4 @@
-// Package config loads the ocagents sources: the OpenCode configuration,
+// Package config loads the ocx sources: the OpenCode configuration,
 // agent prompts, skills, and commands.
 package config
 
@@ -16,7 +16,7 @@ import (
 	"github.com/tailscale/hujson"
 	"gopkg.in/yaml.v3"
 
-	"ocagents/internal/perm"
+	"github.com/plombardi89/ocx/internal/perm"
 )
 
 // Paths relative to the repository root.
@@ -43,7 +43,7 @@ var BuiltinAgents = map[string]bool{
 	"compaction": true, "title": true, "summary": true,
 }
 
-// Config is the subset of opencode.jsonc that ocagents reasons about.
+// Config is the subset of opencode.jsonc that ocx reasons about.
 type Config struct {
 	Schema       string           `json:"$schema"`
 	Model        string           `json:"model"`
@@ -65,7 +65,7 @@ type Agent struct {
 	Disabled    bool        `json:"disabled"`
 }
 
-// FindRoot walks up from dir to the ocagents repository root.
+// FindRoot walks up from dir to the ocx repository root.
 func FindRoot(dir string) (string, error) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
@@ -77,7 +77,7 @@ func FindRoot(dir string) (string, error) {
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", errors.New("not inside the ocagents repository (no " + ConfigFile + " found)")
+			return "", errors.New("not inside the ocx repository (no " + ConfigFile + " found)")
 		}
 		dir = parent
 	}
