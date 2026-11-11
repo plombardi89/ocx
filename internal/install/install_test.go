@@ -394,7 +394,49 @@ func TestAdoptsCorrectLinksThatHaveNoManifest(t *testing.T) {
 	if _, err := Uninstall(dir, true); err != nil {
 		t.Fatal(err)
 	}
-	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
-		t.Fatalf("uninstall left %d entries", len(entries))
+	// Install didn't create skills/ and commands/ this time, so they stay.
+	for path, kind := range snapshot(t, dir) {
+		if kind != "dir" {
+			t.Errorf("uninstall left %s (%s)", path, kind)
+		}
 	}
+}
+
+func TestUninstallKeepsDirectoriesItDidNotCreate(t *testing.T) {
+	for _, sub := range []string{"skills", "commands"} {
+		t.Run("linked "+sub, func(t *testing.T) {
+			root, dir, library := repoRoot(t), t.TempDir(), t.TempDir()
+			write(t, filepath.Join(library, "mine.md"), "keep\n")
+			container := filepath.Join(dir, sub)
+			if err := os.Symlink(library, container); err != nil {
+				t.Fatal(err)
+			}
+			apply(t, plan(t, root, dir, false))
+			if _, err := Uninstall(dir, true); err != nil {
+				t.Fatal(err)
+			}
+			if target, err := os.Readlink(container); err != nil || target != library {
+				t.Fatalf("%s link = %q, %v; want %s", sub, target, err, library)
+			}
+			if entries, _ := os.ReadDir(library); len(entries) != 1 {
+				t.Fatalf("%s has %d entries, want only the user's file", library, len(entries))
+			}
+		})
+	}
+	t.Run("empty skills directory", func(t *testing.T) {
+		root, dir := repoRoot(t), t.TempDir()
+		if err := os.Mkdir(filepath.Join(dir, "skills"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		apply(t, plan(t, root, dir, false))
+		if _, err := Uninstall(dir, true); err != nil {
+			t.Fatal(err)
+		}
+		if fi, err := os.Lstat(filepath.Join(dir, "skills")); err != nil || !fi.IsDir() {
+			t.Fatalf("skills directory: %v", err)
+		}
+		if _, err := os.Lstat(filepath.Join(dir, "commands")); !os.IsNotExist(err) {
+			t.Fatalf("commands directory install created is still there: %v", err)
+		}
+	})
 }

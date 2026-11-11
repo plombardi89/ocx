@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -83,6 +84,7 @@ type Manifest struct {
 	Installed string            `json:"installed"`
 	Links     []string          `json:"links"`
 	Backups   map[string]string `json:"backups"` // original path -> backup path, both relative
+	Dirs      []string          `json:"dirs"`    // directories install created, relative
 }
 
 // ReadManifest returns the manifest in dir, or nil if there is none.
@@ -311,6 +313,7 @@ func Apply(p *Plan, now time.Time) (err error) {
 	}
 
 	var undo []func() error
+	var created []string
 	defer func() {
 		if err == nil {
 			return
@@ -344,6 +347,9 @@ func Apply(p *Plan, now time.Time) (err error) {
 				return err
 			}
 			undo = append(undo, func() error { return os.Remove(d) })
+			if rel, err := filepath.Rel(p.Dir, d); err == nil && rel != "." && within(d, p.Dir) {
+				created = append(created, rel)
+			}
 		}
 		return nil
 	}
@@ -385,6 +391,7 @@ func Apply(p *Plan, now time.Time) (err error) {
 			err := os.Mkdir(dir, 0o755)
 			if err == nil {
 				undo = append(undo, func() error { return os.Remove(dir) })
+				created = append(created, rel)
 				return rel, nil
 			}
 			if !errors.Is(err, os.ErrExist) {
@@ -448,6 +455,12 @@ func Apply(p *Plan, now time.Time) (err error) {
 	m.Root = p.Root
 	m.Installed = now.UTC().Format(time.RFC3339)
 	m.Links = links
+	for _, d := range created {
+		if !slices.Contains(m.Dirs, d) {
+			m.Dirs = append(m.Dirs, d)
+		}
+	}
+	sort.Strings(m.Dirs)
 	return writeManifest(p.Dir, m)
 }
 
@@ -500,30 +513,29 @@ func Uninstall(dir string, apply bool) ([]string, error) {
 		}
 	}
 	steps = append(steps, "remove "+ManifestName)
+	if len(m.Dirs) > 0 {
+		steps = append(steps, "remove the directories install created, if they are empty")
+	}
 	if apply {
 		if err := os.Remove(filepath.Join(dir, ManifestName)); err != nil {
 			return steps, err
 		}
-		_ = removeEmptyDirs(filepath.Join(dir, BackupDir))
-		for _, sub := range []string{"skills", "commands"} {
-			_ = os.Remove(filepath.Join(dir, sub)) // only succeeds if empty
+		// Deepest first, so a parent is empty by the time it is tried.
+		dirs := slices.Clone(m.Dirs)
+		sort.Sort(sort.Reverse(sort.StringSlice(dirs)))
+		for _, d := range dirs {
+			removeEmptyDir(filepath.Join(dir, d))
 		}
 	}
 	return steps, nil
 }
 
-// removeEmptyDirs removes dir and its subdirectories if they hold no files.
-func removeEmptyDirs(dir string) error {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return err
+// removeEmptyDir removes path if it is an empty directory. A link to a
+// directory is left alone even though os.Remove would delete the link.
+func removeEmptyDir(path string) {
+	if fi, err := os.Lstat(path); err == nil && fi.IsDir() {
+		_ = os.Remove(path) // fails, as it should, unless empty
 	}
-	for _, e := range entries {
-		if e.IsDir() {
-			_ = removeEmptyDirs(filepath.Join(dir, e.Name()))
-		}
-	}
-	return os.Remove(dir)
 }
 
 // Describe formats a plan for people.
