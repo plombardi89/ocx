@@ -26,11 +26,17 @@ type reviewSummary struct {
 	Blockers, Majors, Writing, Minors, Nits  int
 }
 
-// Verdict returns the verdict and the summary line from the last OCREVIEW,
-// OCPLAN, OCDEBUG, or OCCONSULT line in text.
-func Verdict(text string) (verdict, line string, ok bool) {
+// Summary is the verdict, the head it names (OCREVIEW lines only), and the
+// whole line from the last OCREVIEW, OCPLAN, OCDEBUG, or OCCONSULT line in a
+// report.
+type Summary struct {
+	Verdict, Head, Line string
+}
+
+// ParseSummary returns the summary of text, if it has one.
+func ParseSummary(text string) (Summary, bool) {
 	s, ok := parseSummary(text)
-	return s.Verdict, s.Line, ok
+	return Summary{Verdict: s.Verdict, Head: s.Head, Line: s.Line}, ok
 }
 
 // parseSummary returns the last OCREVIEW or OCPLAN summary line in text, or

@@ -161,24 +161,78 @@ func checkCredentialHelper(repo string) check.Result {
 	var problems []string
 	for _, helper := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		helper = strings.TrimSpace(helper)
-		switch {
-		case helper == "" || strings.HasPrefix(helper, "!"):
+		if helper == "" || strings.HasPrefix(helper, "!") {
 			continue
-		case !strings.Contains(helper, "/"):
-			if _, err := exec.LookPath("git-credential-" + strings.Fields(helper)[0]); err != nil {
-				problems = append(problems, fmt.Sprintf("%q: git-credential-%s is not installed", helper, strings.Fields(helper)[0]))
+		}
+		program := helperProgram(helper)
+		if !strings.Contains(program, "/") {
+			path, err := findHelper("git-credential-" + program)
+			if err != nil {
+				problems = append(problems, fmt.Sprintf("%q: git-credential-%s is not installed", helper, program))
+				continue
 			}
-		default:
-			path := strings.ReplaceAll(strings.Fields(strings.ReplaceAll(helper, `\ `, "\x00"))[0], "\x00", " ")
-			if err := run(5*time.Second, "", path, "--version"); err != nil {
-				problems = append(problems, fmt.Sprintf("%q can't run here: %v", path, err))
-			}
+			program = path
+		}
+		if err := starts(program); err != nil {
+			problems = append(problems, fmt.Sprintf("%q can't run here: %v", program, err))
 		}
 	}
 	if len(problems) > 0 {
 		return warn(name, append(problems, "pushes over HTTPS will fail; run: gh auth setup-git")...)
 	}
 	return check.Result{Name: name, Status: check.Pass}
+}
+
+// helperProgram returns the program a credential.helper value runs: its
+// first word, which may be quoted or contain backslash-escaped spaces.
+func helperProgram(helper string) string {
+	if q := helper[0]; q == '"' || q == '\'' {
+		if end := strings.IndexByte(helper[1:], q); end >= 0 {
+			return helper[1 : 1+end]
+		}
+	}
+	var b strings.Builder
+	for i := 0; i < len(helper); i++ {
+		c := helper[i]
+		if c == '\\' && i+1 < len(helper) {
+			i++
+			b.WriteByte(helper[i])
+			continue
+		}
+		if c == ' ' || c == '\t' {
+			break
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
+
+// findHelper looks a helper up the way git does: in git's own program
+// directory, where helpers such as store and cache live, then on PATH.
+func findHelper(name string) (string, error) {
+	if dir, err := output(5*time.Second, "", "git", "--exec-path"); err == nil {
+		path := filepath.Join(dir, name)
+		if fi, err := os.Stat(path); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+			return path, nil
+		}
+	}
+	return exec.LookPath(name)
+}
+
+// starts reports whether program can be started at all. It passes an
+// operation name that git never sends; the credential protocol has helpers
+// ignore operations they don't know, and how it exits doesn't matter.
+func starts(program string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, program, "ocx-doctor-probe")
+	cmd.Stdin = strings.NewReader("")
+	err := cmd.Run()
+	var exitErr *exec.ExitError
+	if err == nil || errors.As(err, &exitErr) {
+		return nil
+	}
+	return err
 }
 
 func checkRepo(opts Options, repo string) []check.Result {

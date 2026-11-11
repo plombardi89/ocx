@@ -229,3 +229,172 @@ func TestUninstallWithoutInstall(t *testing.T) {
 		t.Fatal("uninstall without a manifest should fail")
 	}
 }
+
+// snapshot describes every entry under dir: links by target, files by
+// content, so two snapshots are equal only if nothing changed.
+func snapshot(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, path)
+		switch {
+		case d.Type()&os.ModeSymlink != 0:
+			target, err := os.Readlink(path)
+			out[rel] = "link " + target
+			return err
+		case d.IsDir():
+			out[rel] = "dir"
+		default:
+			data, err := os.ReadFile(path)
+			out[rel] = "file " + string(data)
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func sameSnapshot(t *testing.T, before, after map[string]string) {
+	t.Helper()
+	for k, v := range before {
+		if after[k] != v {
+			t.Errorf("%s: was %q, now %q", k, v, after[k])
+		}
+	}
+	for k, v := range after {
+		if _, ok := before[k]; !ok {
+			t.Errorf("%s: new entry %q", k, v)
+		}
+	}
+}
+
+func TestForcedReinstallKeepsTheOriginalBackup(t *testing.T) {
+	root, dir := repoRoot(t), t.TempDir()
+	agents := filepath.Join(dir, "AGENTS.md")
+	write(t, agents, "original instructions\n")
+	apply(t, plan(t, root, dir, true))
+
+	if err := os.Remove(agents); err != nil {
+		t.Fatal(err)
+	}
+	write(t, agents, "replacement instructions\n")
+	apply(t, plan(t, root, dir, true)) // same timestamp as the first install
+
+	if data, err := os.ReadFile(filepath.Join(dir, BackupDir, "20261111T120000Z-2", "AGENTS.md")); err != nil || string(data) != "replacement instructions\n" {
+		t.Errorf("second backup = %q, %v", data, err)
+	}
+	if _, err := Uninstall(dir, true); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(agents); err != nil || string(data) != "original instructions\n" {
+		t.Fatalf("restored %q, %v; the original was overwritten", data, err)
+	}
+}
+
+func TestFailedInstallLeavesTheDirectoryAsItWas(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	root, dir := repoRoot(t), t.TempDir()
+	write(t, filepath.Join(dir, "AGENTS.md"), "original instructions\n")
+	write(t, filepath.Join(dir, "opencode.jsonc"), `{"$schema": "https://opencode.ai/config.json"}`)
+	skills := filepath.Join(dir, "skills")
+	if err := os.Mkdir(skills, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(skills, 0o755) })
+	before := snapshot(t, dir)
+
+	if err := Apply(plan(t, root, dir, true), now); err == nil {
+		t.Fatal("install into a read-only skills directory succeeded")
+	}
+	sameSnapshot(t, before, snapshot(t, dir))
+}
+
+func TestFailedManifestWriteLeavesTheDirectoryAsItWas(t *testing.T) {
+	root, dir := repoRoot(t), t.TempDir()
+	write(t, filepath.Join(dir, "AGENTS.md"), "original instructions\n")
+	// A directory where the manifest's temporary file goes makes the write fail.
+	write(t, filepath.Join(dir, ManifestName+".tmp", "keep"), "x")
+	before := snapshot(t, dir)
+
+	if err := Apply(plan(t, root, dir, true), now); err == nil {
+		t.Fatal("install succeeded without writing its manifest")
+	}
+	sameSnapshot(t, before, snapshot(t, dir))
+}
+
+func TestFailedReinstallRestoresTheEarlierInstall(t *testing.T) {
+	root, dir := repoRoot(t), t.TempDir()
+	apply(t, plan(t, root, dir, false))
+	agents := filepath.Join(dir, "AGENTS.md")
+	if err := os.Remove(agents); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "README.md"), agents); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, ManifestName+".tmp", "keep"), "x")
+	before := snapshot(t, dir)
+
+	p := plan(t, root, dir, false)
+	if kinds(p)["AGENTS.md"] != Relink {
+		t.Fatalf("unexpected plan:\n%s", p.Describe())
+	}
+	if err := Apply(p, now); err == nil {
+		t.Fatal("install succeeded without writing its manifest")
+	}
+	sameSnapshot(t, before, snapshot(t, dir))
+}
+
+func TestLinkedOpencodeJSONWithSettingsIsAConflict(t *testing.T) {
+	root, dir := repoRoot(t), t.TempDir()
+	settings := filepath.Join(t.TempDir(), "settings.json")
+	write(t, settings, `{"model": "custom/model"}`)
+	if err := os.Symlink(settings, filepath.Join(dir, "opencode.json")); err != nil {
+		t.Fatal(err)
+	}
+	if p := plan(t, root, dir, false); len(p.Conflicts) != 1 || !strings.Contains(p.Conflicts[0], "opencode.json") {
+		t.Fatalf("conflicts = %v", p.Conflicts)
+	}
+	if p := plan(t, root, dir, true); len(p.Conflicts) > 0 || kinds(p)["opencode.json"] != Backup {
+		t.Fatalf("forced plan:\n%s", p.Describe())
+	}
+
+	write(t, settings, `{"$schema": "https://opencode.ai/config.json"}`)
+	if p := plan(t, root, dir, false); len(p.Conflicts) > 0 || kinds(p)["opencode.json"] != Backup {
+		t.Fatalf("link to a config that only sets $schema:\n%s", p.Describe())
+	}
+}
+
+func TestAdoptsCorrectLinksThatHaveNoManifest(t *testing.T) {
+	root, dir := repoRoot(t), t.TempDir()
+	apply(t, plan(t, root, dir, false))
+	if err := os.Remove(filepath.Join(dir, ManifestName)); err != nil {
+		t.Fatal(err)
+	}
+
+	p := plan(t, root, dir, false)
+	if !p.Changes() {
+		t.Fatalf("plan for links without a manifest:\n%s", p.Describe())
+	}
+	apply(t, p)
+	if m, err := ReadManifest(dir); err != nil || m == nil || m.Root != root {
+		t.Fatalf("manifest = %+v, %v", m, err)
+	}
+	if again := plan(t, root, dir, false); again.Changes() {
+		t.Fatalf("still wants changes:\n%s", again.Describe())
+	}
+	if _, err := Uninstall(dir, true); err != nil {
+		t.Fatal(err)
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Fatalf("uninstall left %d entries", len(entries))
+	}
+}

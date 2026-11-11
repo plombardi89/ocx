@@ -235,7 +235,7 @@ func runStage(root string, args []string) error {
 	if err := stage.Stage(root, args[0], stage.Options{}); err != nil {
 		return err
 	}
-	fmt.Printf("staged into %s/.opencode (remove .opencode/ and opencode.json to undo)\n", args[0])
+	fmt.Printf("staged into %s/.opencode (remove it to undo)\n", args[0])
 	return nil
 }
 

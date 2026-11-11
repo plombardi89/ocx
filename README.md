@@ -206,7 +206,7 @@ Astra stays the critic: it ties Sol on quality, and using a different model at e
 ### Install globally
 
 1. `make install` shows what would change in `~/.config/opencode` (or `$XDG_CONFIG_HOME/opencode`) without changing anything.
-2. `make install APPLY=1` makes the changes. Each piece becomes a link into this checkout, so `git pull` updates the agents. A global `opencode.jsonc` that only sets `$schema` is backed up and replaced. Anything else ocx didn't create is a conflict, so you can merge your settings first; `FORCE=1` backs it up and replaces it. Backups go in `~/.config/opencode/.ocx-backups/`, which OpenCode doesn't read.
+2. `make install APPLY=1` makes the changes. Each piece becomes a link into this checkout, so `git pull` updates the agents. A global `opencode.jsonc` that only sets `$schema` is backed up and replaced. Anything else ocx didn't create is a conflict, so you can merge your settings first; `FORCE=1` backs it up and replaces it. Backups go in `~/.config/opencode/.ocx-backups/`, which OpenCode doesn't read, and never replace earlier ones. If any step fails, install undoes the steps before it.
 3. In each project, run `make hook-install REPO=/path/to/project` and add an `AGENTS.md` (start from `templates/AGENTS.md`).
 4. On GitHub, protect the default branch with a ruleset that blocks deletion and force pushes and requires a pull request. Private repositories need GitHub Pro for this.
 5. Check everything with `make doctor REPOS="/path/to/project ..."`.
@@ -222,7 +222,7 @@ Astra stays the critic: it ties Sol on quality, and using a different model at e
 
 ### Reviewing without installing
 
-`make review REPO=/path/to/project` runs the reviewer on the project's current commit. It checks the commit out into a temporary worktree under `/tmp/opencode/ocx-review/`, stages this configuration there, and runs the reviewer headlessly. The project needs no `.opencode/` directory or install. Worktrees share git notes, so the verdict lands where the pre-push hook looks for it. Uncommitted changes aren't reviewed. It exits 0 only on approval; otherwise fix the findings, commit, and run the next round with the `ROUND=` and `PREVIOUS=` values it prints.
+`make review REPO=/path/to/project` runs the reviewer on the project's current commit without installing anything. It checks the commit out into a temporary worktree under `/tmp/opencode/ocx-review/`, stages this configuration in a `.opencode/` directory there that git ignores, and runs the reviewer headlessly. The project's own checkout is left exactly as it was. Projects that commit their own `.opencode/` or `opencode.json` can't be reviewed this way. Worktrees share git notes, so the verdict lands where the pre-push hook looks for it. Uncommitted changes aren't reviewed. It exits 0 only when the reviewer approves this exact commit; otherwise fix the findings, commit, and run the command it prints for the next round.
 
 ### Bypassing the gate yourself
 

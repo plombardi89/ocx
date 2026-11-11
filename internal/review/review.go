@@ -38,16 +38,32 @@ type Options struct {
 type Outcome struct {
 	Branch, Base, Head string
 	Verdict            string
-	Summary            string
+	Summary            string // the report's summary line
+	SummaryHead        string // the head the summary line names
 	Report             string
 	NoteFirstLine      string
 	EventsPath         string
 	Duration           time.Duration
 }
 
-// Approved reports whether the reviewer approved and recorded the approval.
+// Approved reports whether the reviewer approved this exact commit, both in
+// its report and in the note the pre-push hook checks.
 func (o *Outcome) Approved() bool {
-	return o.Verdict == "APPROVE" && strings.HasPrefix(o.NoteFirstLine, "ocreview: verdict=APPROVE ")
+	return o.Head != "" &&
+		o.Verdict == "APPROVE" && o.SummaryHead == o.Head &&
+		strings.HasPrefix(o.NoteFirstLine, "ocreview: verdict=APPROVE ") && noteHead(o.NoteFirstLine) == o.Head
+}
+
+// noteHead returns the value of the last head= field in a note's first line,
+// matching how the pre-push hook reads it.
+func noteHead(line string) string {
+	head := ""
+	for _, f := range strings.Fields(line) {
+		if v, ok := strings.CutPrefix(f, "head="); ok {
+			head = v
+		}
+	}
+	return head
 }
 
 // Run reviews the commit checked out in opts.Repo.
@@ -121,7 +137,9 @@ func Run(opts Options) (*Outcome, error) {
 	if runErr != nil {
 		return o, runErr
 	}
-	o.Verdict, o.Summary, _ = eval.Verdict(o.Report)
+	if sum, ok := eval.ParseSummary(o.Report); ok {
+		o.Verdict, o.Summary, o.SummaryHead = sum.Verdict, sum.Line, sum.Head
+	}
 	note, _ := git(top, "notes", "--ref=ocreview", "show", o.Head)
 	o.NoteFirstLine, _, _ = strings.Cut(note, "\n")
 	return o, nil

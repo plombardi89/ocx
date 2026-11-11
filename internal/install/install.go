@@ -101,12 +101,22 @@ func ReadManifest(dir string) (*Manifest, error) {
 	return &m, nil
 }
 
+// writeManifest replaces the manifest in one step, so a failed write leaves
+// the previous one intact.
 func writeManifest(dir string, m *Manifest) error {
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, ManifestName), append(data, '\n'), 0o644)
+	tmp := filepath.Join(dir, ManifestName+".tmp")
+	if err := os.WriteFile(tmp, append(data, '\n'), 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, filepath.Join(dir, ManifestName)); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 // Action kinds.
@@ -116,6 +126,7 @@ const (
 	Relink = "relink" // replace a link that points somewhere else
 	Backup = "backup" // move an existing file aside, then link
 	Remove = "remove" // remove a link this install no longer needs
+	Record = "record" // write the manifest that uninstall and doctor rely on
 )
 
 // Action is one step of a plan.
@@ -172,9 +183,9 @@ func PlanInstall(root, dir string, force bool) (*Plan, error) {
 
 	// The other global config file name would also be loaded alongside ours.
 	other := "opencode.json"
-	if fi, err := os.Lstat(filepath.Join(dir, other)); err == nil {
+	if _, err := os.Lstat(filepath.Join(dir, other)); err == nil {
 		a := Action{Kind: Backup, Path: other, Note: "OpenCode would also load it"}
-		if fi.Mode()&os.ModeSymlink == 0 && !trivialConfig(filepath.Join(dir, other)) && !force {
+		if !trivialConfig(filepath.Join(dir, other)) && !force {
 			p.Conflicts = append(p.Conflicts, fmt.Sprintf("%s has settings of its own; merge what you need into the ocx configuration, then rerun with --force to back it up", other))
 		}
 		p.Actions = append(p.Actions, a)
@@ -190,6 +201,16 @@ func PlanInstall(root, dir string, force bool) (*Plan, error) {
 				p.Actions = append(p.Actions, Action{Kind: Remove, Path: l, Target: target, Note: "no longer part of ocx"})
 			}
 		}
+	}
+
+	// Links that are already right still need a manifest that lists them.
+	switch {
+	case m == nil:
+		p.Actions = append(p.Actions, Action{Kind: Record, Path: ManifestName, Note: "none yet"})
+	case m.Root != root:
+		p.Actions = append(p.Actions, Action{Kind: Record, Path: ManifestName, Note: "was for " + m.Root})
+	case !sameSet(m.Links, wanted):
+		p.Actions = append(p.Actions, Action{Kind: Record, Path: ManifestName})
 	}
 	sort.SliceStable(p.Actions, func(i, j int) bool { return p.Actions[i].Path < p.Actions[j].Path })
 	return p, nil
@@ -255,19 +276,28 @@ func trivialConfig(path string) bool {
 	return true
 }
 
+func sameSet(list []string, set map[string]bool) bool {
+	seen := map[string]bool{}
+	for _, x := range list {
+		if !set[x] {
+			return false
+		}
+		seen[x] = true
+	}
+	return len(seen) == len(set)
+}
+
 func within(path, root string) bool {
 	rel, err := filepath.Rel(root, path)
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // Apply carries out a plan that has no conflicts, then records it in the
-// manifest.
-func Apply(p *Plan, now time.Time) error {
+// manifest. If any step fails, including writing the manifest, it undoes the
+// steps already taken, so the directory is left as it was.
+func Apply(p *Plan, now time.Time) (err error) {
 	if len(p.Conflicts) > 0 {
 		return errors.New("plan has conflicts")
-	}
-	if err := os.MkdirAll(p.Dir, 0o755); err != nil {
-		return err
 	}
 	m, err := ReadManifest(p.Dir)
 	if err != nil {
@@ -279,7 +309,94 @@ func Apply(p *Plan, now time.Time) error {
 	if m.Backups == nil {
 		m.Backups = map[string]string{}
 	}
-	stamp := now.UTC().Format("20060102T150405Z")
+
+	var undo []func() error
+	defer func() {
+		if err == nil {
+			return
+		}
+		var failed []string
+		for i := len(undo) - 1; i >= 0; i-- {
+			if uerr := undo[i](); uerr != nil {
+				failed = append(failed, uerr.Error())
+			}
+		}
+		if len(failed) > 0 {
+			err = fmt.Errorf("%w; undoing the partial install also failed, so check %s by hand: %s", err, p.Dir, strings.Join(failed, "; "))
+		}
+	}()
+	mkdirs := func(dir string) error {
+		var missing []string
+		for d := dir; ; d = filepath.Dir(d) {
+			if _, err := os.Lstat(d); err == nil {
+				break
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			missing = append(missing, d)
+			if filepath.Dir(d) == d {
+				break
+			}
+		}
+		for i := len(missing) - 1; i >= 0; i-- {
+			d := missing[i]
+			if err := os.Mkdir(d, 0o755); err != nil {
+				return err
+			}
+			undo = append(undo, func() error { return os.Remove(d) })
+		}
+		return nil
+	}
+	link := func(target, path string) error {
+		if err := mkdirs(filepath.Dir(path)); err != nil {
+			return err
+		}
+		if err := os.Symlink(target, path); err != nil {
+			return err
+		}
+		undo = append(undo, func() error { return os.Remove(path) })
+		return nil
+	}
+	remove := func(path string) error {
+		old, err := os.Readlink(path)
+		if err != nil {
+			return err
+		}
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+		undo = append(undo, func() error { return os.Symlink(old, path) })
+		return nil
+	}
+	// Each install backs up into a directory of its own that it creates, so
+	// a backup can never replace an earlier one.
+	backupRoot := ""
+	newBackupRoot := func() (string, error) {
+		if err := mkdirs(filepath.Join(p.Dir, BackupDir)); err != nil {
+			return "", err
+		}
+		stamp := now.UTC().Format("20060102T150405Z")
+		for i := 1; i <= 100; i++ {
+			rel := filepath.Join(BackupDir, stamp)
+			if i > 1 {
+				rel += fmt.Sprintf("-%d", i)
+			}
+			dir := filepath.Join(p.Dir, rel)
+			err := os.Mkdir(dir, 0o755)
+			if err == nil {
+				undo = append(undo, func() error { return os.Remove(dir) })
+				return rel, nil
+			}
+			if !errors.Is(err, os.ErrExist) {
+				return "", err
+			}
+		}
+		return "", fmt.Errorf("too many backups named %s in %s", stamp, filepath.Join(p.Dir, BackupDir))
+	}
+
+	if err := mkdirs(p.Dir); err != nil {
+		return err
+	}
 	var links []string
 	for _, a := range p.Actions {
 		path := filepath.Join(p.Dir, a.Path)
@@ -290,7 +407,7 @@ func Apply(p *Plan, now time.Time) error {
 			}
 		case Link, Relink:
 			if a.Kind == Relink {
-				if err := os.Remove(path); err != nil {
+				if err := remove(path); err != nil {
 					return err
 				}
 			}
@@ -299,13 +416,20 @@ func Apply(p *Plan, now time.Time) error {
 			}
 			links = append(links, a.Path)
 		case Backup:
-			rel := filepath.Join(BackupDir, stamp, a.Path)
-			if err := os.MkdirAll(filepath.Dir(filepath.Join(p.Dir, rel)), 0o755); err != nil {
+			if backupRoot == "" {
+				if backupRoot, err = newBackupRoot(); err != nil {
+					return err
+				}
+			}
+			rel := filepath.Join(backupRoot, a.Path)
+			dst := filepath.Join(p.Dir, rel)
+			if err := mkdirs(filepath.Dir(dst)); err != nil {
 				return err
 			}
-			if err := os.Rename(path, filepath.Join(p.Dir, rel)); err != nil {
+			if err := os.Rename(path, dst); err != nil {
 				return err
 			}
+			undo = append(undo, func() error { return os.Rename(dst, path) })
 			if _, done := m.Backups[a.Path]; !done {
 				m.Backups[a.Path] = rel
 			}
@@ -316,7 +440,7 @@ func Apply(p *Plan, now time.Time) error {
 				links = append(links, a.Path)
 			}
 		case Remove:
-			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			if err := remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return err
 			}
 		}
@@ -325,13 +449,6 @@ func Apply(p *Plan, now time.Time) error {
 	m.Installed = now.UTC().Format(time.RFC3339)
 	m.Links = links
 	return writeManifest(p.Dir, m)
-}
-
-func link(target, path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.Symlink(target, path)
 }
 
 // Uninstall removes every link the manifest in dir records, as long as it

@@ -123,3 +123,34 @@ func TestCredentialHelperThatCantRun(t *testing.T) {
 		t.Fatalf("gh helper: %+v", r)
 	}
 }
+
+func TestGitsOwnCredentialHelpersPass(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "-C", repo, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+	execPath, err := exec.Command("git", "--exec-path").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := filepath.Join(strings.TrimSpace(string(execPath)), "git-credential-store")
+	if _, err := os.Stat(store); err != nil {
+		t.Skipf("this git has no credential store helper: %v", err)
+	}
+	for _, helper := range []string{"store", "cache --timeout=3600", store, store + " --file /dev/null"} {
+		if out, err := exec.Command("git", "-C", repo, "config", "credential.helper", helper).CombinedOutput(); err != nil {
+			t.Fatal(string(out))
+		}
+		if r := checkCredentialHelper(repo); r.Status != check.Pass {
+			t.Errorf("helper %q: %+v", helper, r)
+		}
+	}
+
+	if out, err := exec.Command("git", "-C", repo, "config", "credential.helper", "ocx-no-such-helper").CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+	if r := checkCredentialHelper(repo); r.Status != check.Warn || !strings.Contains(strings.Join(r.Details, " "), "not installed") {
+		t.Fatalf("missing helper: %+v", r)
+	}
+}
