@@ -175,3 +175,30 @@ func TestOfflineDoctorDoesNotContactGitHub(t *testing.T) {
 		}
 	}
 }
+
+func TestDoctorFailsWhenAnotherFileSetsPolicies(t *testing.T) {
+	if _, err := exec.LookPath("opencode"); err != nil && os.Getenv("OCX_OPENCODE") == "" {
+		t.Skip("needs opencode")
+	}
+	root, dir := repoRoot(t), filepath.Join(t.TempDir(), "opencode")
+	p, err := install.PlanInstall(root, dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := install.Apply(p, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	opts := Options{Root: root, ConfigDir: dir}
+	if r := checkLoaded(opts); r.Status != check.Pass {
+		t.Fatalf("plain install: %+v", r)
+	}
+
+	extra := `{"policies": [{"action": "tool.use", "resource": "shell:go test *", "effect": "deny"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "opencode.json"), []byte(extra), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r := checkLoaded(opts)
+	if r.Status != check.Fail || !strings.Contains(strings.Join(r.Details, "\n"), filepath.Join(dir, "opencode.json")) {
+		t.Fatalf("install with another file's policies: %+v", r)
+	}
+}

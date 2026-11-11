@@ -666,24 +666,48 @@ func Resolve(root string) (map[string]ResolvedAgent, error) {
 // ResolveIn asks a private OpenCode server started in dir, with extra
 // environment variables env, for the fully resolved agents.
 func ResolveIn(dir string, env []string) (map[string]ResolvedAgent, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, opencodeBin(), "debug", "agents", "--standalone")
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), env...)
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("opencode debug agents: %w", err)
-	}
 	var list []ResolvedAgent
-	if err := json.Unmarshal(out, &list); err != nil {
-		return nil, fmt.Errorf("opencode debug agents: unexpected output: %w", err)
+	if err := debugJSON(dir, env, "agents", &list); err != nil {
+		return nil, err
 	}
 	agents := map[string]ResolvedAgent{}
 	for _, a := range list {
 		agents[a.ID] = a
 	}
 	return agents, nil
+}
+
+// ConfigSource is one configuration file or directory OpenCode loaded.
+type ConfigSource struct {
+	Type string `json:"type"` // "document" or "directory"
+	Path string `json:"path"`
+	Info struct {
+		Policies []perm.Rule `json:"policies"`
+	} `json:"info"`
+}
+
+// LoadedConfig asks a private OpenCode server started in dir, with extra
+// environment variables env, which configuration sources it loads.
+func LoadedConfig(dir string, env []string) ([]ConfigSource, error) {
+	var sources []ConfigSource
+	err := debugJSON(dir, env, "config", &sources)
+	return sources, err
+}
+
+func debugJSON(dir string, env []string, what string, v any) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, opencodeBin(), "debug", what, "--standalone")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), env...)
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("opencode debug %s: %w", what, err)
+	}
+	if err := json.Unmarshal(out, v); err != nil {
+		return fmt.Errorf("opencode debug %s: unexpected output: %w", what, err)
+	}
+	return nil
 }
 
 // ScratchDir returns the directory for ocx's temporary projects.

@@ -216,7 +216,7 @@ Astra stays the critic: it ties Sol on quality, and using a different model at e
 ### What `make doctor` checks
 
 1. Every link is in place and points into this checkout.
-2. OpenCode, started in an empty project, loads every agent with its pinned model and a non-empty prompt, and all permission probes pass against the installed configuration. A missing `prompts` link otherwise fails silently: OpenCode loads the agents with empty prompts.
+2. OpenCode, started in an empty project, loads every agent with its pinned model and a non-empty prompt, and all permission probes pass against the installed configuration. A missing `prompts` link otherwise fails silently: OpenCode loads the agents with empty prompts. Doctor also fails if any other configuration file OpenCode loads, such as a system-wide one, sets policies, because the probes can't account for how those combine with ocx's.
 3. The tools agents rely on: a working `gh` login, `gcc` for the race detector, `shellcheck`, and a git credential helper that can actually run.
 4. For each repository: the pre-push hook is installed and current, there's an `AGENTS.md`, and GitHub protects the default branch.
 

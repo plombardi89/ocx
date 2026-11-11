@@ -115,12 +115,48 @@ func checkLoaded(opts Options) check.Result {
 	if err != nil {
 		return result(name, []string{err.Error()})
 	}
+	sources, err := check.LoadedConfig(dir, env)
+	if err != nil {
+		return result(name, []string{err.Error()})
+	}
 	cfgPath := filepath.Join(opts.Root, config.ConfigFile)
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		return result(name, []string{err.Error()})
 	}
-	return check.CompareResolved(name, opts.Root, cfgPath, cfg, agents)
+	r := check.CompareResolved(name, opts.Root, cfgPath, cfg, agents)
+	if other := otherPolicies(sources, cfgPath); len(other) > 0 {
+		if r.Status == check.Pass {
+			r.Details = nil
+		}
+		r.Status = check.Fail
+		r.Details = append(r.Details, other...)
+	}
+	return r
+}
+
+// otherPolicies describes the configuration files, other than ocx's own,
+// that set policies. The resolved agents already include every file's
+// permissions, but policies aren't part of them, and the order OpenCode
+// combines policies from files at the same level isn't specified, so the
+// probes can only be trusted when ocx's file is the only one with policies.
+func otherPolicies(sources []check.ConfigSource, ours string) []string {
+	ours = realPath(ours)
+	var out []string
+	for _, s := range sources {
+		if s.Type != "document" || len(s.Info.Policies) == 0 || realPath(s.Path) == ours {
+			continue
+		}
+		out = append(out, fmt.Sprintf("%s sets %d policies of its own, which the permission probes don't account for; merge them into %s or remove them", s.Path, len(s.Info.Policies), config.ConfigFile))
+	}
+	return out
+}
+
+func realPath(path string) string {
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		return real
+	}
+	return filepath.Clean(path)
 }
 
 func checkTools(offline bool) []check.Result {
