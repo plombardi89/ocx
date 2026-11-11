@@ -1,4 +1,4 @@
-# ocagents
+# ocx
 
 OpenCode agents, skills, and commands for building complex software, with an **independent, adversarial review gate**: every push needs an approving review, from a reviewer on a different model family, of the exact commit being pushed.
 

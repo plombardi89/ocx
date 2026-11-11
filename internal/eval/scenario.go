@@ -1,5 +1,5 @@
 // Package eval runs scenario evaluations: it builds a throwaway git
-// workspace from a fixture, stages the ocagents configuration into it, runs
+// workspace from a fixture, stages the ocx configuration into it, runs
 // an agent headlessly with `opencode run`, and checks the outcome.
 package eval
 
@@ -15,7 +15,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"ocagents/internal/config"
+	"github.com/plombardi89/ocx/internal/config"
 )
 
 // Scenario is one evals/scenarios/<name>/scenario.yaml.

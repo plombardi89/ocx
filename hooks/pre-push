@@ -1,5 +1,5 @@
 #!/bin/sh
-# ocagents-managed-hook: pre-push review gate.
+# ocx-managed-hook: pre-push review gate.
 #
 # Rejects any push that would update main or master, and any push of a commit
 # that has no approving independent review. The reviewer agent records its
@@ -17,7 +17,7 @@ input=$(cat)
 status=0
 
 fail() {
-	printf 'ocagents: %s\n' "$1" >&2
+	printf 'ocx: %s\n' "$1" >&2
 	status=1
 }
 

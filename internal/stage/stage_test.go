@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"ocagents/internal/config"
-	"ocagents/internal/gitx"
+	"github.com/plombardi89/ocx/internal/config"
+	"github.com/plombardi89/ocx/internal/gitx"
 )
 
 func TestStage(t *testing.T) {

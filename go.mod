@@ -1,4 +1,4 @@
-module ocagents
+module github.com/plombardi89/ocx
 
 go 1.26.1
 

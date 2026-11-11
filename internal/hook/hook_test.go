@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"ocagents/internal/config"
-	"ocagents/internal/gitx"
+	"github.com/plombardi89/ocx/internal/config"
+	"github.com/plombardi89/ocx/internal/gitx"
 )
 
 func hookSource(t *testing.T) string {

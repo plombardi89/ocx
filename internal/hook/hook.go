@@ -1,4 +1,4 @@
-// Package hook installs the ocagents pre-push review gate into a repository.
+// Package hook installs the ocx pre-push review gate into a repository.
 package hook
 
 import (
@@ -11,11 +11,11 @@ import (
 	"strings"
 )
 
-// Marker identifies a hook managed by ocagents.
-const Marker = "ocagents-managed-hook"
+// Marker identifies a hook managed by ocx.
+const Marker = "ocx-managed-hook"
 
 // Install copies the hook script at src into repo's hooks directory as
-// pre-push. An existing pre-push hook that ocagents does not manage is
+// pre-push. An existing pre-push hook that ocx does not manage is
 // preserved as pre-push.local; the managed hook runs it after its own checks.
 // It returns the installed path.
 func Install(src, repo string) (string, error) {
@@ -24,7 +24,7 @@ func Install(src, repo string) (string, error) {
 		return "", err
 	}
 	if !bytes.Contains(script, []byte(Marker)) {
-		return "", fmt.Errorf("%s is not the ocagents hook (missing %q marker)", src, Marker)
+		return "", fmt.Errorf("%s is not the ocx hook (missing %q marker)", src, Marker)
 	}
 	out, err := exec.Command("git", "-C", repo, "rev-parse", "--git-path", "hooks").Output()
 	if err != nil {

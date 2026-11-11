@@ -1,4 +1,4 @@
-// Command ocx is the ocagents toolbox: static checks, evals, sandboxes,
+// Command ocx is the toolbox for this repository: static checks, evals, sandboxes,
 // staging, and review-gate installation.
 package main
 
@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"ocagents/internal/check"
-	"ocagents/internal/config"
-	"ocagents/internal/eval"
-	"ocagents/internal/hook"
-	"ocagents/internal/stage"
+	"github.com/plombardi89/ocx/internal/check"
+	"github.com/plombardi89/ocx/internal/config"
+	"github.com/plombardi89/ocx/internal/eval"
+	"github.com/plombardi89/ocx/internal/hook"
+	"github.com/plombardi89/ocx/internal/stage"
 )
 
-const usage = `ocx - ocagents toolbox
+const usage = `ocx - checks, evals, and tools for the ocx agents and skills
 
 Usage:
   ocx check [--offline]                 validate configuration, skills, hook, scenarios, permissions

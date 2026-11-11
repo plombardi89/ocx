@@ -9,10 +9,10 @@ import (
 	"strings"
 	"text/template"
 
-	"ocagents/internal/config"
-	"ocagents/internal/gitx"
-	"ocagents/internal/hook"
-	"ocagents/internal/stage"
+	"github.com/plombardi89/ocx/internal/config"
+	"github.com/plombardi89/ocx/internal/gitx"
+	"github.com/plombardi89/ocx/internal/hook"
+	"github.com/plombardi89/ocx/internal/stage"
 )
 
 func bytesReader(b []byte) io.Reader { return bytes.NewReader(b) }
