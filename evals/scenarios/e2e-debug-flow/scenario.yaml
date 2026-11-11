@@ -1,0 +1,35 @@
+name: e2e-debug-flow
+description: Build debugs the paging bug with the /debug flow - reproduces it, fixes the root cause in the store with a regression test, gets the fix reviewed, and pushes a fix branch.
+fixture: go-service
+tags: [debug, e2e]
+agent: build
+timeout: 60m
+base_overlays: [../_shared/pagination-fix, ../reviewer-round2-fixed/tests]
+branch: main
+commits:
+  - message: "feat: list products alphabetically by name"
+    overlay: ../_shared/name-sort
+prompt: |
+  Debug this by following the `systematic-debugging` skill: reproduce it with a failing check before changing any code, find and explain the root cause, fix it at the root with a regression test, and get the fix reviewed before pushing. If three attempts fail, get a second opinion from the `consultant` subagent before trying more.
+
+  The problem: Customers paging through the catalog with GET /products?limit=20 sometimes see the same product on two different pages, and some products never appear on any page. It doesn't happen every time: reloading the same page can show different products. Support says it started after we switched the product list to alphabetical order. The catalog has about 2,000 products from several suppliers.
+
+  Push the fix branch to origin when it's approved. Don't open a pull request; this remote is not on GitHub. This is a non-interactive run: don't ask questions; if you get blocked, explain why and stop.
+expect:
+  skill_loaded: systematic-debugging
+  e2e:
+    pushed_branch_prefix: fix/
+    remote_main_unchanged: true
+    pushed_head_approved: true
+    pushed_files_include: ["internal/store/store.go", "internal/*/*_test.go"]
+    dispatch_agent: reviewer
+    dispatch_min: 1
+    dispatch_prefix: Review request
+    dispatch_forbid:
+      - "(?i)tests? (all )?(pass|passed|passing|are green|is green)"
+      - "(?i)already (verified|checked|tested|reviewed)"
+      - "(?i)\\b(just|only) (check|look|focus|review)"
+      - "(?i)(trivial|simple|small|tiny) (change|fix)"
+      - "(?i)root cause"
+    comment_forbid:
+      - "(?i)\\b(plan|finding|per review|review round|as requested|task \\d+|bug report|customer report)\\b"

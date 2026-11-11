@@ -70,6 +70,11 @@ func Prepare(root string, s Scenario, dir string, opts stage.Options) (*Workspac
 	if err := stage.CopyTree(filepath.Join(root, config.FixturesDir, s.Fixture), ws.Work); err != nil {
 		return nil, fmt.Errorf("copy fixture: %w", err)
 	}
+	for _, d := range s.BaseOverlays {
+		if err := stage.CopyTree(filepath.Join(s.Dir, d), ws.Work); err != nil {
+			return nil, fmt.Errorf("apply base overlay %s: %w", d, err)
+		}
+	}
 	if err := gitx.Init(ws.Work); err != nil {
 		return nil, err
 	}
@@ -78,14 +83,22 @@ func Prepare(root string, s Scenario, dir string, opts stage.Options) (*Workspac
 		return nil, err
 	}
 	ws.Base, ws.Head = base, base
+
+	// Commits on main land before main is pushed, so origin matches main and
+	// Base is main's final state.
+	if s.Branch == "main" {
+		if err := applyCommits(ws, s); err != nil {
+			return nil, err
+		}
+		ws.Base = ws.Head
+	}
 	if _, err := gitx.Run(dir, "init", "-q", "--bare", "-b", "main", ws.Origin); err != nil {
 		return nil, err
 	}
-	steps := [][]string{
+	for _, st := range [][]string{
 		{"remote", "add", "origin", ws.Origin},
 		{"push", "-q", "-u", "origin", "main"},
-	}
-	for _, st := range steps {
+	} {
 		if _, err := gitx.Run(ws.Work, st...); err != nil {
 			return nil, err
 		}
@@ -93,34 +106,42 @@ func Prepare(root string, s Scenario, dir string, opts stage.Options) (*Workspac
 	if _, err := hook.Install(filepath.Join(root, config.HookFile), ws.Work); err != nil {
 		return nil, err
 	}
-	if s.Branch != "" {
+	if s.Branch != "" && s.Branch != "main" {
 		if _, err := gitx.Run(ws.Work, "switch", "-q", "-c", s.Branch); err != nil {
 			return nil, err
 		}
 		ws.Branch = s.Branch
-		for i, c := range s.Commits {
-			for _, d := range c.Dirs() {
-				if err := stage.CopyTree(filepath.Join(s.Dir, d), ws.Work); err != nil {
-					return nil, fmt.Errorf("commit %d: apply overlay %s: %w", i+1, d, err)
-				}
-			}
-			sha, err := gitx.CommitAll(ws.Work, c.Message)
-			if err != nil {
-				return nil, err
-			}
-			ws.Head = sha
-			ws.Commits = append(ws.Commits, sha)
-			if c.Note != "" {
-				if err := seedNote(ws, filepath.Join(s.Dir, c.Note), sha); err != nil {
-					return nil, fmt.Errorf("commit %d: %w", i+1, err)
-				}
-			}
+		if err := applyCommits(ws, s); err != nil {
+			return nil, err
 		}
 	}
 	if err := stage.Stage(root, ws.Work, opts); err != nil {
 		return nil, err
 	}
 	return ws, nil
+}
+
+// applyCommits makes the scenario's commits on the current branch.
+func applyCommits(ws *Workspace, s Scenario) error {
+	for i, c := range s.Commits {
+		for _, d := range c.Dirs() {
+			if err := stage.CopyTree(filepath.Join(s.Dir, d), ws.Work); err != nil {
+				return fmt.Errorf("commit %d: apply overlay %s: %w", i+1, d, err)
+			}
+		}
+		sha, err := gitx.CommitAll(ws.Work, c.Message)
+		if err != nil {
+			return err
+		}
+		ws.Head = sha
+		ws.Commits = append(ws.Commits, sha)
+		if c.Note != "" {
+			if err := seedNote(ws, filepath.Join(s.Dir, c.Note), sha); err != nil {
+				return fmt.Errorf("commit %d: %w", i+1, err)
+			}
+		}
+	}
+	return nil
 }
 
 // seedNote attaches a rendered review note to sha, as if an earlier review

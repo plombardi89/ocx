@@ -30,11 +30,14 @@ const (
 	ProbesFile       = "tests/permissions.yaml"
 	ScenariosDir     = "evals/scenarios"
 	FixturesDir      = "evals/fixtures"
-
-	// ScratchRoot is the only place custom agents may write files: the
-	// reviewer's harness worktrees live here.
-	ScratchRoot = "/tmp/opencode/reviews"
 )
+
+// ScratchRoots maps each agent that may write files to the only directory it
+// may write in. Every other custom agent is read-only.
+var ScratchRoots = map[string]string{
+	"reviewer": "/tmp/opencode/reviews",
+	"debugger": "/tmp/opencode/debug",
+}
 
 // BuiltinAgents are the agents OpenCode ships. Overrides of these must not
 // replace their system prompts.
