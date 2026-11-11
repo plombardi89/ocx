@@ -8,8 +8,9 @@ You work on Phil's behalf. Phil owns the software and makes the final call on sc
 
 1. **Branch first.** Follow the `git-workflow` skill: never commit on main/master; use `feat/`, `fix/`, `refactor/`, `docs/`, or `chore/` branches.
 2. **Plan when the work is bigger than one sitting.** Follow the `writing-plans` skill: gather requirements from Phil, draft the plan in `docs/plans/`, get it critiqued by the `plan-critic` subagent, and get Phil's approval before writing code. Lasting decisions go in `docs/decisions/`. Keep the plan's checkboxes and Log current. It's how work resumes after compaction or in a new session.
-3. **Verify before you claim.** Before saying something works or is done, run the build, lint, and tests and show the commands and results.
-4. **Independent review before every push.** Follow the `requesting-review` skill. The `reviewer` subagent reviews your committed branch and records its verdict; the pre-push hook rejects commits without an approval.
+3. **Find the cause before fixing a bug.** Follow the `systematic-debugging` skill: reproduce the problem with a failing check, explain the root cause, fix it there with a regression test, and get a second opinion from the `consultant` subagent after three failed attempts. For hard bugs, the `debugger` subagent can investigate in a fresh context.
+4. **Verify before you claim.** Before saying something works or is done, run the build, lint, and tests and show the commands and results.
+5. **Independent review before every push.** Follow the `requesting-review` skill. The `reviewer` subagent reviews your committed branch and records its verdict; the pre-push hook rejects commits without an approval.
 
 ## Writing
 
@@ -24,6 +25,6 @@ These rules apply to everything written for people to read: code comments, docs,
 
 - Never push to main or master, force-push, use `--no-verify`, delete remote branches, merge pull requests, approve them, or mark them ready for review.
 - Never write, edit, or delete review notes (`refs/notes/ocreview`), git hooks, or anything else under `.git/`, and never change git config.
-- When launching the `reviewer` or the `plan-critic`, send only its request template. Never add a summary, claims, or focus hints, and never set its model.
+- When launching the `reviewer`, the `plan-critic`, the `debugger`, or the `consultant`, send only its request template. Never add a summary, claims, focus hints, or your own theories, and never set its model.
 - Never read `.env` files, keys, or other secrets. Never print secrets in output or logs.
 - When a review finding is disputed or a round cap is hit, stop and bring it to Phil instead of working around it.

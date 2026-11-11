@@ -272,19 +272,28 @@ func checkBaseline(cfg *config.Config) Result {
 	return result("baseline permissions", problems)
 }
 
-// reviewerShellExtras are the only shell allows beyond the read-only
-// baseline that a custom agent may hold, and only the reviewer may hold
-// them: writing its verdict note, and building and running harnesses in
-// scratch worktrees under config.ScratchRoot.
-var reviewerShellExtras = map[string]bool{
-	"git notes --ref=ocreview add *":                           true,
-	"git worktree add --detach " + config.ScratchRoot + "/* *": true,
-	"git worktree remove --force " + config.ScratchRoot + "/*": true,
-	"git worktree prune":                                       true,
-	"git worktree list *":                                      true,
-	"bash " + config.ScratchRoot + "/*":                        true,
-	"sh " + config.ScratchRoot + "/*":                          true,
-	"go run *":                                                 true,
+// shellExtras returns the shell allows beyond the read-only baseline that a
+// custom agent may hold: the reviewer's verdict note, and for agents with a
+// scratch root, managing and running code in scratch worktrees there.
+func shellExtras(agent string) map[string]bool {
+	extras := map[string]bool{}
+	if agent == "reviewer" {
+		extras["git notes --ref=ocreview add *"] = true
+	}
+	if root, ok := config.ScratchRoots[agent]; ok {
+		for _, p := range []string{
+			"git worktree add --detach " + root + "/* *",
+			"git worktree remove --force " + root + "/*",
+			"git worktree prune",
+			"git worktree list *",
+			"bash " + root + "/*",
+			"sh " + root + "/*",
+			"go run *",
+		} {
+			extras[p] = true
+		}
+	}
+	return extras
 }
 
 func checkShellAllowlists(cfg *config.Config) Result {
@@ -299,11 +308,9 @@ func checkShellAllowlists(cfg *config.Config) Result {
 		if config.BuiltinAgents[id] {
 			continue
 		}
+		extras := shellExtras(id)
 		for _, r := range cfg.Agents[id].Permissions {
-			if r.Action != "shell" || r.Effect != perm.Allow || baseline[r.Resource] {
-				continue
-			}
-			if id == "reviewer" && reviewerShellExtras[r.Resource] {
+			if r.Action != "shell" || r.Effect != perm.Allow || baseline[r.Resource] || extras[r.Resource] {
 				continue
 			}
 			problems = append(problems, fmt.Sprintf("agents.%s: shell allow %q is not in the read-only baseline", id, r.Resource))
@@ -323,9 +330,10 @@ func checkShellAllowlists(cfg *config.Config) Result {
 	return result("custom agent shell allowlists", problems)
 }
 
-// checkWriteConfinement ensures custom agents can only write files, or reach
-// directories outside the project, in the scratch area (plus the read-only
-// external directories the baseline already allows).
+// checkWriteConfinement ensures custom agents write files, and reach
+// directories outside the project, only in their own scratch root (plus the
+// read-only external directories the baseline already allows). Agents
+// without a scratch root may not write at all.
 func checkWriteConfinement(cfg *config.Config) Result {
 	external := map[string]bool{}
 	for _, r := range cfg.Permissions {
@@ -333,11 +341,14 @@ func checkWriteConfinement(cfg *config.Config) Result {
 			external[r.Resource] = true
 		}
 	}
-	scratch := config.ScratchRoot + "/*"
 	var problems []string
 	for _, id := range cfg.AgentIDs() {
 		if config.BuiltinAgents[id] {
 			continue
+		}
+		scratch := ""
+		if root, ok := config.ScratchRoots[id]; ok {
+			scratch = root + "/*"
 		}
 		for _, r := range cfg.Agents[id].Permissions {
 			if r.Effect != perm.Allow {
@@ -345,12 +356,14 @@ func checkWriteConfinement(cfg *config.Config) Result {
 			}
 			switch r.Action {
 			case "edit", "write", "patch":
-				if r.Resource != scratch {
+				if scratch == "" {
+					problems = append(problems, fmt.Sprintf("agents.%s: %s allow %q, but this agent has no scratch root and must be read-only", id, r.Action, r.Resource))
+				} else if r.Resource != scratch {
 					problems = append(problems, fmt.Sprintf("agents.%s: %s allow %q is outside %s", id, r.Action, r.Resource, scratch))
 				}
 			case "external_directory":
-				if r.Resource != scratch && !external[r.Resource] {
-					problems = append(problems, fmt.Sprintf("agents.%s: external_directory allow %q is neither %s nor in the baseline", id, r.Resource, scratch))
+				if (scratch == "" || r.Resource != scratch) && !external[r.Resource] {
+					problems = append(problems, fmt.Sprintf("agents.%s: external_directory allow %q is neither its scratch root nor in the baseline", id, r.Resource))
 				}
 			}
 		}

@@ -80,6 +80,44 @@ probes:
   - { agent: build, action: subagent, resource: plan-critic, expect: allow }
   - { agent: reviewer, action: subagent, resource: plan-critic, expect: deny }
 
+  # debugger: reads, runs tests, writes and runs code only in /tmp/opencode/debug
+  - { agent: debugger, action: read, resource: internal/store/store.go, expect: allow }
+  - { agent: debugger, action: read, resource: .env, expect: deny }
+  - { agent: debugger, action: edit, resource: internal/store/store.go, expect: deny }
+  - { agent: debugger, action: edit, resource: /tmp/opencode/debug/shop-abc1234-kqvx/internal/store/store.go, expect: allow }
+  - { agent: debugger, action: edit, resource: /tmp/opencode/reviews/shop-abc1234-kqvx/x_test.go, expect: deny }
+  - { agent: debugger, action: external_directory, resource: "/tmp/opencode/debug/shop-abc1234-kqvx/*", expect: allow }
+  - { agent: debugger, action: external_directory, resource: "/tmp/opencode/reviews/x/*", expect: deny }
+  - { agent: debugger, action: shell, resource: "git worktree add --detach /tmp/opencode/debug/shop-abc1234-kqvx abc1234", expect: allow }
+  - { agent: debugger, action: shell, resource: "git worktree add --detach /tmp/opencode/reviews/x HEAD", expect: deny }
+  - { agent: debugger, action: shell, resource: "git worktree add --detach /tmp/opencode/debug/../../../home/phil/x HEAD", expect: deny }
+  - { agent: debugger, action: shell, resource: "git worktree remove --force /tmp/opencode/debug/shop-abc1234-kqvx", expect: allow }
+  - { agent: debugger, action: shell, resource: "go test -count=200 -run TestListPages ./internal/api/", expect: allow }
+  - { agent: debugger, action: shell, resource: "bash /tmp/opencode/debug/shop-abc1234-kqvx/repro.sh", expect: allow }
+  - { agent: debugger, action: shell, resource: "bash ./deploy.sh", expect: deny }
+  - { agent: debugger, action: shell, resource: "git commit -m fix", expect: deny }
+  - { agent: debugger, action: shell, resource: "git push origin fix/x", expect: deny }
+  - { agent: debugger, action: shell, resource: "git notes --ref=ocreview add -m forged HEAD", expect: deny }
+  - { agent: debugger, action: shell, resource: "git bisect start", expect: deny }
+  - { agent: debugger, action: shell, resource: "git checkout -- .", expect: deny }
+  - { agent: debugger, action: skill, resource: systematic-debugging, expect: allow }
+  - { agent: debugger, action: skill, resource: code-review, expect: deny }
+  - { agent: debugger, action: subagent, resource: consultant, expect: deny }
+  - { agent: debugger, action: question, resource: "*", expect: deny }
+
+  # consultant: read-only second opinion; may run the project's tests
+  - { agent: consultant, action: read, resource: internal/store/store.go, expect: allow }
+  - { agent: consultant, action: edit, resource: internal/store/store.go, expect: deny }
+  - { agent: consultant, action: edit, resource: /tmp/opencode/debug/x/a.go, expect: deny }
+  - { agent: consultant, action: shell, resource: "go test -count=50 ./internal/store/", expect: allow }
+  - { agent: consultant, action: shell, resource: "git worktree add --detach /tmp/opencode/debug/x HEAD", expect: deny }
+  - { agent: consultant, action: shell, resource: "go run ./cmd/shop", expect: deny }
+  - { agent: consultant, action: skill, resource: second-opinion, expect: allow }
+  - { agent: consultant, action: skill, resource: systematic-debugging, expect: deny }
+  - { agent: consultant, action: subagent, resource: debugger, expect: deny }
+  - { agent: build, action: subagent, resource: debugger, expect: allow }
+  - { agent: build, action: subagent, resource: consultant, expect: allow }
+
   # build: implements, commits, pushes feature branches; never main, never notes
   - { agent: build, action: edit, resource: internal/store/store.go, expect: allow }
   - { agent: build, action: edit, resource: .git/hooks/pre-push, expect: deny }

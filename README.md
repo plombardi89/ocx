@@ -44,6 +44,7 @@ Independence comes from the setup, not from asking nicely:
 | Fixes without proof | Every BLOCKER and MAJOR fix needs a regression test; next round, the reviewer runs it on the previous commit and requires it to fail there |
 | Author skips review | Pre-push hook requires an approval note; only the reviewer may write notes; policies block `--no-verify`, `git -c`, `git config`, hook edits, force pushes, main/master |
 | Unreadable comments and docs | The writing rules apply to every agent; the reviewer reports clear breaks as WRITING findings, which block approval |
+| Bugs patched at the symptom | `systematic-debugging` requires a failing reproduction and a step-by-step root cause before any fix; after three failed attempts, a consultant from the other model family gives a second opinion |
 | TODOs slipping into main | The reviewer lists every new TODO for Phil; build opens the pull request as a draft, and only Phil can mark it ready |
 
 ## Writing rules
@@ -82,9 +83,11 @@ The reviewer may write and run code to prove a point, but only in a detached scr
 config/opencode.jsonc     agents, models, baseline permissions, policies (single source of truth)
 config/global-AGENTS.md   global working agreements and writing rules (becomes ~/.config/opencode/AGENTS.md)
 config/prompts/           agent system prompts, referenced with {file:./prompts/…}
-skills/                   code-review, plan-critique, requesting-review, git-workflow, writing-plans, writing-style
+skills/                   code-review, plan-critique, requesting-review, git-workflow, writing-plans,
+                          writing-style, systematic-debugging, second-opinion
 commands/                 /plan: plan work with a critique and your approval
                           /critique-plan <file>: run the plan critic yourself
+                          /debug <problem>: reproduce, find the root cause, fix, review
                           /review: run the reviewer on the current branch yourself
 hooks/pre-push            the review gate
 templates/AGENTS.md       starting point for a project's AGENTS.md
@@ -101,8 +104,9 @@ cmd/ocx, internal/        Go tooling behind the Makefile
 | `make check-offline` | Same without running OpenCode | free |
 | `make eval-reviewer` | Reviewer scenarios with the pinned reviewer model | tokens |
 | `make eval-critic` | Plan-critic scenarios, plus the end-to-end planning run | tokens |
-| `make eval-e2e` | End-to-end runs: planning flow, and implement → review → push through the gate | tokens |
-| `make bakeoff` | One tag's comparison scenarios × `BAKEOFF_MODELS` × `REPS` (`TAG=reviewer` or `TAG=critic`) | tokens |
+| `make eval-debug` | Debugger and consultant scenarios, plus the end-to-end debugging run | tokens |
+| `make eval-e2e` | End-to-end runs: planning flow, debugging flow, and implement → review → push through the gate | tokens |
+| `make bakeoff` | One tag's comparison scenarios × `BAKEOFF_MODELS` × `REPS` (`TAG=reviewer`, `critic`, or `debug`) | tokens |
 | `make verify` | `check` + every eval: the single "is everything good?" entrypoint | tokens |
 | `make sandbox` | Throwaway copy of the fixture with this config staged; opens OpenCode in it (`SCENARIO=reviewer-planted-bug` to start on a review branch) | — |
 | `make hook-install REPO=…` | Install the review gate into a repository | — |
@@ -124,6 +128,9 @@ Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run even
 | `critic-good-plan` | Complete, checkable plan: APPROVE with no invented gaps or questions |
 | `e2e-review-gate` | build implements, requests review with the bare template, pushes only the approved commit; its added comments must stand on their own |
 | `e2e-plan-flow` | build plans a feature, asks the critic with the bare template, revises, and writes no code |
+| `debugger-unstable-sort` | Paging shows products twice or never: sorting by name leaves ties in random map order. Dedupe and `SliceStable` are wrong fixes; the debugger must find the tie and break it by ID |
+| `consultant-second-opinion` | The same bug after three attempts that all looked elsewhere: the consultant must question their shared assumption |
+| `e2e-debug-flow` | build reproduces the bug, fixes it in the store with a regression test, gets it reviewed, and pushes a `fix/` branch |
 
 Scenarios can stack several commits on a branch and seed earlier review notes (`commits:` with `overlays:` and `note:`); shared material lives in `evals/scenarios/_shared/`.
 
@@ -136,9 +143,11 @@ All models are set in `config/opencode.jsonc`. MAI models are never used; `make 
 | Driver (`build`, session default) | `claude-opus-5.5` | Strongest on repository-scale coding (SWE-bench Pro 89.9%, FrontierCode, AA Intelligence Index 58) |
 | `reviewer` | `gpt-6.1-sol#xhigh` | Different family from the driver; won our model comparison (below) |
 | `plan-critic` | `gpt-6-astra#high` | Different family from the driver, and a different model from the reviewer; tied for best in our model comparison (below) |
+| `debugger` | `claude-opus-5.5#xhigh` | Deep, long-context investigation; build applies its fix and the reviewer still checks it |
+| `consultant` | `gpt-6.1-sol#xhigh` | Different family from the driver, so its second opinion doesn't share build's assumptions |
 | `explore` | `claude-haiku-5.5` | Matches Opus on code-search recall, much faster |
 
-Planned for later slices: `debugger` (Opus xhigh), `test-writer` (Sonnet 5.5 xhigh), `security-reviewer` (GPT-6 Astra high), `consultant` (Sol xhigh), `lead`/`implementer`.
+Planned for later slices: `test-writer` (Sonnet 5.5 xhigh), `security-reviewer` (GPT-6 Astra high), `lead`/`implementer`.
 
 ### Reviewer model comparison
 
@@ -161,9 +170,9 @@ Astra stays the critic: it ties Sol on quality, and using a different model at e
 
 ## Permissions model
 
-- **Baseline (all agents):** shell asks by default; read-only git and build/test/lint commands are pre-approved; committing and pushing are denied (build re-allows them); review notes are read-only; `.env`/keys denied; `.git/` uneditable; outside directories ask; only `explore`, `plan-critic`, and `reviewer` can be launched as subagents.
-- **Custom agents** start with a deny-all rule and allowlist what they need. `make check` enforces this; that they write files only under `/tmp/opencode/reviews/`; and that their shell allowlists stay within the read-only baseline. The reviewer's exceptions are its verdict note, scratch worktrees (`git worktree add --detach|remove --force` under the scratch root, path traversal denied), `go run`, and scripts inside its scratch worktree.
-- **Policies** hard-deny what must never happen regardless of approvals: pushes to main/master, force pushes, `--no-verify`, ref deletion, `git -c`, `git config` writes, `git update-ref`, touching hooks, `gh pr merge|review|ready`, `gh api`, `sudo`, publishing.
+- **Baseline (all agents):** shell asks by default; read-only git and build/test/lint commands are pre-approved; committing and pushing are denied (build re-allows them); review notes are read-only; `.env`/keys denied; `.git/` uneditable; outside directories ask; only `explore`, `plan-critic`, `reviewer`, `debugger`, and `consultant` can be launched as subagents.
+- **Custom agents** start with a deny-all rule and allowlist what they need. `make check` enforces this; that only the reviewer (`/tmp/opencode/reviews/`) and the debugger (`/tmp/opencode/debug/`) write files, each only in its own scratch root; and that their shell allowlists stay within the read-only baseline. The reviewer's exceptions are its verdict note, scratch worktrees (`git worktree add --detach|remove --force` under the scratch root, path traversal denied), `go run`, and scripts inside its scratch worktree.
+- **Policies** hard-deny what must never happen regardless of approvals: pushes to main/master, force pushes, `--no-verify`, ref deletion, git global options and environment variables that retarget commands (`git -c`, `git -C`, `--git-dir`, `GIT_DIR`, `GIT_CONFIG_*`), `git config` writes, `git update-ref`, touching hooks, `gh pr merge|review|ready`, `gh api`, `sudo`, publishing.
 
 ## Using it
 

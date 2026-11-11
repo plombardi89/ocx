@@ -13,6 +13,7 @@ import (
 
 var (
 	summaryLine      = regexp.MustCompile(`OC(REVIEW|PLAN) verdict=(\S+)(?: spec=(\S+) quality=(\S+))? blockers=(\d+) majors=(\d+)(?: writing=(\d+))? minors=(\d+) nits=(\d+)(?: head=([0-9a-f]+))?`)
+	statusLine       = regexp.MustCompile(`OC(DEBUG|CONSULT) status=(\S+)`)
 	noteLine         = regexp.MustCompile(`^ocreview: verdict=(\S+) .*head=([0-9a-f]+)`)
 	executedEvidence = regexp.MustCompile(`(?i)evidence \(executed\)`)
 	patchFileHeader  = regexp.MustCompile(`(?m)^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$`)
@@ -25,11 +26,17 @@ type reviewSummary struct {
 	Blockers, Majors, Writing, Minors, Nits  int
 }
 
-// parseSummary returns the last OCREVIEW or OCPLAN summary line in text.
+// parseSummary returns the last OCREVIEW or OCPLAN summary line in text, or
+// failing that the last OCDEBUG or OCCONSULT status line.
 func parseSummary(text string) (reviewSummary, bool) {
 	all := summaryLine.FindAllStringSubmatch(text, -1)
 	if len(all) == 0 {
-		return reviewSummary{}, false
+		status := statusLine.FindAllStringSubmatch(text, -1)
+		if len(status) == 0 {
+			return reviewSummary{}, false
+		}
+		m := status[len(status)-1]
+		return reviewSummary{Line: m[0], Kind: "OC" + m[1], Verdict: m[2]}, true
 	}
 	m := all[len(all)-1]
 	n := func(s string) int {
@@ -46,6 +53,16 @@ func parseSummary(text string) (reviewSummary, bool) {
 // Counts formats the finding counts as blockers/majors/writing/minors/nits.
 func (s reviewSummary) Counts() string {
 	return fmt.Sprintf("%d/%d/%d/%d/%d", s.Blockers, s.Majors, s.Writing, s.Minors, s.Nits)
+}
+
+// inScratch reports whether path is inside any agent's scratch root.
+func inScratch(path string) bool {
+	for _, root := range config.ScratchRoots {
+		if strings.HasPrefix(path, root+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // editTargets returns the file paths an edit, write, or patch call targets.
@@ -171,12 +188,12 @@ func (a *asserter) run(e Expect) []Check {
 				continue
 			}
 			for _, path := range editTargets(p.State.Input) {
-				if !strings.HasPrefix(path, config.ScratchRoot+"/") {
+				if !inScratch(path) {
 					outside = append(outside, path)
 				}
 			}
 		}
-		add("edits only in scratch", len(outside) == 0, "edited outside %s: %v", config.ScratchRoot, outside)
+		add("edits only in scratch", len(outside) == 0, "edited outside the scratch roots: %v", outside)
 	}
 
 	if e.E2E != nil {
@@ -225,6 +242,20 @@ func (a *asserter) e2e(e E2E) []Check {
 			}
 		}
 		add("pushed heads approved", ok, "%s", detail)
+	}
+
+	for _, glob := range e.PushedFilesInclude {
+		var files []string
+		for _, b := range pushed {
+			files = append(files, strings.Split(gitOut(a.ws.Origin, "diff", "--name-only", a.ws.Base, "refs/heads/"+b), "\n")...)
+		}
+		found := false
+		for _, f := range files {
+			if ok, _ := filepath.Match(glob, f); ok {
+				found = true
+			}
+		}
+		add("pushed changes include "+glob, found, "pushed files: %v", files)
 	}
 
 	if len(e.CommentForbid) > 0 {

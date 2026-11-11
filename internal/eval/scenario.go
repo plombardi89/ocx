@@ -24,12 +24,17 @@ type Scenario struct {
 	Description string   `yaml:"description"`
 	Fixture     string   `yaml:"fixture"`
 	Tags        []string `yaml:"tags"`
+	// BaseOverlays, relative to the scenario directory, are copied over the
+	// fixture in order before the initial commit, so they become part of
+	// main.
+	BaseOverlays []string `yaml:"base_overlays"`
 	// Agent is passed to `opencode run --agent`.
 	Agent string `yaml:"agent"`
 	// Bakeoff scenarios run once per --models entry; others ignore it.
 	Bakeoff bool `yaml:"bakeoff"`
 	// Branch, when set, is created from main and receives the overlay as
-	// one commit with CommitMessage, or the Commits in order.
+	// one commit with CommitMessage, or the Commits in order. Branch "main"
+	// puts the commits on main itself, before main is pushed to origin.
 	Branch        string       `yaml:"branch"`
 	CommitMessage string       `yaml:"commit_message"`
 	Overlay       string       `yaml:"overlay"`
@@ -111,6 +116,9 @@ type E2E struct {
 	// ChangedMin is the least number of changed files.
 	ChangedOnly []string `yaml:"changed_only"`
 	ChangedMin  int      `yaml:"changed_min"`
+	// PushedFilesInclude are path globs that must each match at least one
+	// file changed by the pushed branches.
+	PushedFilesInclude []string `yaml:"pushed_files_include"`
 }
 
 // TimeoutDuration returns the scenario timeout, defaulting to 30 minutes.
@@ -212,9 +220,14 @@ func (s Scenario) Validate(root string) error {
 		}
 	}
 	switch s.Expect.Verdict {
-	case "", "APPROVE", "REQUEST_CHANGES", "REVISE":
+	case "", "APPROVE", "REQUEST_CHANGES", "REVISE", "ROOT_CAUSE", "STUCK", "HYPOTHESES", "NEED_INFO":
 	default:
-		errs = append(errs, fmt.Errorf("%s: verdict must be APPROVE, REQUEST_CHANGES, or REVISE", prefix))
+		errs = append(errs, fmt.Errorf("%s: verdict must be APPROVE, REQUEST_CHANGES, REVISE, ROOT_CAUSE, STUCK, HYPOTHESES, or NEED_INFO", prefix))
+	}
+	for _, d := range s.BaseOverlays {
+		if _, err := os.Stat(filepath.Join(s.Dir, d)); err != nil {
+			errs = append(errs, fmt.Errorf("%s: base overlay %q not found", prefix, d))
+		}
 	}
 	patterns := append([]string{}, s.Expect.Mentions...)
 	if s.Expect.E2E != nil {

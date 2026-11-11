@@ -6,7 +6,7 @@ TAG ?= reviewer
 BAKEOFF_MODELS ?= github-copilot/gpt-6.1-sol\#xhigh,github-copilot/gpt-6-astra\#high,github-copilot/claude-opus-5.5\#high
 REPS ?= 3
 
-.PHONY: help check check-offline test eval eval-reviewer eval-critic eval-e2e bakeoff verify sandbox hook-install fmt
+.PHONY: help check check-offline test eval eval-reviewer eval-critic eval-debug eval-e2e bakeoff verify sandbox hook-install fmt
 
 help: ## Show targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
@@ -31,10 +31,13 @@ eval-reviewer: ## Run the reviewer scenarios with the pinned reviewer model
 eval-critic: ## Run the plan-critic scenarios, including the end-to-end planning run
 	$(OCX) eval --tag critic $(ARGS)
 
+eval-debug: ## Run the debugger and consultant scenarios, including the end-to-end debugging run
+	$(OCX) eval --tag debug $(ARGS)
+
 eval-e2e: ## Run the end-to-end scenarios (review gate and planning flow)
 	$(OCX) eval --tag e2e $(ARGS)
 
-bakeoff: ## Compare models on one tag's scenarios: TAG=reviewer|critic BAKEOFF_MODELS=... REPS=...
+bakeoff: ## Compare models on one tag's scenarios: TAG=reviewer|critic|debug BAKEOFF_MODELS=... REPS=...
 	$(OCX) eval --tag $(TAG) --models '$(BAKEOFF_MODELS)' --reps $(REPS) $(ARGS)
 
 verify: check eval ## Everything: checks, then all evals

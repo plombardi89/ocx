@@ -1,0 +1,26 @@
+name: debugger-unstable-sort
+description: Paging shows some products twice and others never, intermittently. Root cause - sorting by name alone leaves ties in random map order. The obvious fixes (dedupe in the handler, SliceStable) are wrong.
+fixture: go-service
+tags: [debug]
+agent: debugger
+bakeoff: true
+base_overlays: [../_shared/pagination-fix, ../reviewer-round2-fixed/tests]
+branch: main
+commits:
+  - message: "feat: list products alphabetically by name"
+    overlay: ../_shared/name-sort
+prompt: |
+  Debug request
+  Repository: {{.Repo}}
+  Commit: {{.Head}}
+  Bug: Customers paging through the catalog with GET /products?limit=20 sometimes see the same product on two different pages, and some products never appear on any page. It doesn't happen every time: reloading the same page can show different products. Support says it started after we switched the product list to alphabetical order. The catalog has about 2,000 products from several suppliers.
+expect:
+  verdict: ROOT_CAUSE
+  mentions:
+    - "(?i)(same name|duplicate names?|equal names?|identical names?|\\bties?\\b|\\btied\\b)"
+    - "(?i)(map iteration|random(ized)? (iteration )?order|nondetermin|non-determin|unstable|not stable|arbitrary order)"
+    - "(?is)## Fix.*\\bID\\b"
+    - "(?is)## Reproduction.*\\b(FAIL|fail(s|ed)?|duplicate|missing)\\b"
+  unchanged: true
+  skill_loaded: systematic-debugging
+  edits_in_scratch_only: true
