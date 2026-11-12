@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -68,8 +69,12 @@ func (s reviewSummary) Counts() string {
 	return fmt.Sprintf("%d/%d/%d/%d/%d", s.Blockers, s.Majors, s.Writing, s.Minors, s.Nits)
 }
 
-// inScratch reports whether path is inside any agent's scratch root.
-func inScratch(path string) bool {
+// inScratch reports whether path is inside agent's own scratch root, or,
+// for an agent without one, inside any agent's.
+func inScratch(agent, path string) bool {
+	if root, ok := config.ScratchRoots[agent]; ok {
+		return strings.HasPrefix(path, root+"/")
+	}
 	for _, root := range config.ScratchRoots {
 		if strings.HasPrefix(path, root+"/") {
 			return true
@@ -99,6 +104,7 @@ func editTargets(input map[string]any) []string {
 }
 
 type asserter struct {
+	agent  string
 	ws     *Workspace
 	tr     *Transcript
 	final  string
@@ -169,15 +175,12 @@ func (a *asserter) run(e Expect) []Check {
 	}
 
 	if e.Unchanged {
-		status := gitOut(a.ws.Work, "status", "--porcelain")
-		head := gitOut(a.ws.Work, "rev-parse", "HEAD")
-		branch := gitOut(a.ws.Work, "branch", "--show-current")
-		ok := status == "" && head == a.ws.Head && branch == a.ws.Branch
-		add("repository unchanged", ok, "status=%q head=%s branch=%s", status, head, branch)
-
+		after := captureState(a.ws.Work)
+		changes := a.ws.Before.changes(after)
+		add("repository unchanged", len(changes) == 0, "%s", strings.Join(changes, "; "))
 		var extra []string
-		for _, line := range strings.Split(gitOut(a.ws.Work, "worktree", "list", "--porcelain"), "\n") {
-			if wt, ok := strings.CutPrefix(line, "worktree "); ok && wt != a.ws.Work {
+		for _, wt := range after.Worktrees {
+			if !slices.Contains(a.ws.Before.Worktrees, wt) {
 				extra = append(extra, wt)
 			}
 		}
@@ -201,12 +204,19 @@ func (a *asserter) run(e Expect) []Check {
 				continue
 			}
 			for _, path := range editTargets(p.State.Input) {
-				if !inScratch(path) {
+				if !inScratch(a.agent, path) {
 					outside = append(outside, path)
 				}
 			}
 		}
-		add("edits only in scratch", len(outside) == 0, "edited outside the scratch roots: %v", outside)
+		add("edits only in scratch", len(outside) == 0, "edited outside the scratch root: %v", outside)
+	}
+
+	if e.Tests != nil {
+		if r, ok := ParseTestsReport(a.final); ok {
+			a.summary, a.verdict = r.Line, r.Status
+		}
+		checks = append(checks, checkTestsReport(a.ws, a.final, *e.Tests)...)
 	}
 
 	if e.E2E != nil {

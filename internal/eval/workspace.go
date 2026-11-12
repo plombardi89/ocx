@@ -2,10 +2,13 @@ package eval
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -28,6 +31,73 @@ type Workspace struct {
 	// Commits lists the scenario commits in order.
 	Base, Head string
 	Commits    []string
+	// Before is the work repository's state just before the agent runs.
+	Before repoState
+}
+
+// repoState is what a run must leave as it found it, unless the scenario
+// expects changes: HEAD, the branch, git status, the content of every file
+// that differs from HEAD, and the registered worktrees.
+type repoState struct {
+	Head, Branch, Status string
+	Files                map[string]string
+	Worktrees            []string
+}
+
+// statusEntry matches a `git status --porcelain` line. Output is trimmed,
+// so the first line may have lost the leading space of its two-letter code.
+var statusEntry = regexp.MustCompile(`^(?:[ MADRCUT?!]{2} |[MADRCUT?!] )(.+)$`)
+
+func captureState(work string) repoState {
+	s := repoState{
+		Head:   gitOut(work, "rev-parse", "HEAD"),
+		Branch: gitOut(work, "branch", "--show-current"),
+		Status: gitOut(work, "status", "--porcelain=v1", "--untracked-files=all"),
+		Files:  map[string]string{},
+	}
+	for _, line := range strings.Split(s.Status, "\n") {
+		m := statusEntry.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		p := m[1]
+		if _, to, renamed := strings.Cut(p, " -> "); renamed {
+			p = to
+		}
+		p = strings.Trim(p, `"`)
+		sum := "missing"
+		if data, err := os.ReadFile(filepath.Join(work, p)); err == nil {
+			sum = fmt.Sprintf("%x", sha256.Sum256(data))
+		}
+		s.Files[p] = sum
+	}
+	for _, line := range strings.Split(gitOut(work, "worktree", "list", "--porcelain"), "\n") {
+		if wt, ok := strings.CutPrefix(line, "worktree "); ok {
+			s.Worktrees = append(s.Worktrees, wt)
+		}
+	}
+	return s
+}
+
+// changes describes how after differs from s, ignoring worktrees.
+func (s repoState) changes(after repoState) []string {
+	var out []string
+	if after.Head != s.Head {
+		out = append(out, fmt.Sprintf("HEAD moved from %s to %s", s.Head, after.Head))
+	}
+	if after.Branch != s.Branch {
+		out = append(out, fmt.Sprintf("branch changed from %q to %q", s.Branch, after.Branch))
+	}
+	if after.Status != s.Status {
+		out = append(out, fmt.Sprintf("git status changed from %q to %q", s.Status, after.Status))
+	}
+	for p, sum := range after.Files {
+		if before, ok := s.Files[p]; ok && before != sum {
+			out = append(out, p+" changed")
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // templateData is what scenario prompts and seeded notes can reference.
@@ -118,6 +188,7 @@ func Prepare(root string, s Scenario, dir string, opts stage.Options) (*Workspac
 	if err := stage.Stage(root, ws.Work, opts); err != nil {
 		return nil, err
 	}
+	ws.Before = captureState(ws.Work)
 	return ws, nil
 }
 

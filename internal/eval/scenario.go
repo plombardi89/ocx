@@ -94,7 +94,31 @@ type Expect struct {
 	// EditsInScratchOnly requires every completed edit/write/patch call to
 	// target a file under the scratch root.
 	EditsInScratchOnly bool `yaml:"edits_in_scratch_only"`
-	E2E                *E2E `yaml:"e2e"`
+	// Tests checks a test-writer report.
+	Tests *TestsExpect `yaml:"tests"`
+	E2E   *E2E         `yaml:"e2e"`
+}
+
+// TestsExpect holds assertions on a test-writer report. The report's own
+// consistency is always checked; the other fields are checked when set.
+type TestsExpect struct {
+	// Plan is the repository-relative plan whose acceptance criteria the
+	// report must cover, as it is at Head. A plan missing at Head has none.
+	Plan   string `yaml:"plan"`
+	Status string `yaml:"status"`
+	// Exact counts from the OCTESTS line.
+	Criteria *int `yaml:"criteria"`
+	Passed   *int `yaml:"passed"`
+	Failed   *int `yaml:"failed"`
+	Gaps     *int `yaml:"gaps"`
+	NotRun   *int `yaml:"not_run"`
+	// MinFailed is the least number of FAILED criteria.
+	MinFailed int `yaml:"min_failed"`
+	// Results maps criterion numbers to the result each must have.
+	Results map[int]string `yaml:"results"`
+	// NameForbid are regular expressions that no test name or comment in
+	// the returned files may match.
+	NameForbid []string `yaml:"name_forbid"`
 }
 
 // E2E holds assertions for end-to-end scenarios where build does the work.
@@ -230,6 +254,21 @@ func (s Scenario) Validate(root string) error {
 		}
 	}
 	patterns := append([]string{}, s.Expect.Mentions...)
+	if t := s.Expect.Tests; t != nil {
+		patterns = append(patterns, t.NameForbid...)
+		switch t.Status {
+		case "", "COMPLETE", "INCOMPLETE":
+		default:
+			errs = append(errs, fmt.Errorf("%s: tests status must be COMPLETE or INCOMPLETE", prefix))
+		}
+		for n, r := range t.Results {
+			switch r {
+			case "PASSED", "FAILED", "GAP", "NOT_RUN":
+			default:
+				errs = append(errs, fmt.Errorf("%s: criterion %d result must be PASSED, FAILED, GAP, or NOT_RUN", prefix, n))
+			}
+		}
+	}
 	if s.Expect.E2E != nil {
 		patterns = append(patterns, s.Expect.E2E.DispatchForbid...)
 		patterns = append(patterns, s.Expect.E2E.CommentForbid...)
