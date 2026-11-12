@@ -131,7 +131,7 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 	if e.AdoptedExactly {
 		want := map[string]string{}
 		for _, f := range adopted {
-			want[f.Path] = strings.TrimSpace(f.Content)
+			want[f.Path] = f.Content
 		}
 		found, detail := false, "no commit adds exactly the returned files"
 		for _, r := range results {
@@ -143,7 +143,8 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 				same := true
 				for _, c := range changes {
 					content, ok := want[c.Path]
-					if c.Status != "A" || !ok || gitOut(r.Repo, "show", sha+":"+c.Path) != content {
+					blob, err := gitRaw(r.Repo, "cat-file", "blob", sha+":"+c.Path)
+					if c.Status != "A" || !ok || err != nil || string(blob) != content {
 						same = false
 						break
 					}
@@ -153,7 +154,7 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 				}
 			}
 		}
-		add("adopted the returned test files exactly, in a commit of their own", found, "%s", detail)
+		add("adopted the returned test files byte for byte, in a commit of their own", found, "%s", detail)
 	}
 
 	if len(e.Buggy) > 0 {
@@ -167,21 +168,28 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 			var files []TestFile
 			var missing []string
 			for _, f := range adopted {
-				content, err := gitShow(r.Repo, sha, f.Path)
+				content, err := gitRaw(r.Repo, "cat-file", "blob", sha+":"+f.Path)
 				if err != nil {
 					missing = append(missing, f.Path)
 					continue
 				}
-				files = append(files, TestFile{Path: f.Path, Content: content + "\n"})
+				files = append(files, TestFile{Path: f.Path, Content: string(content)})
 			}
 			if len(missing) > 0 {
 				add(b+": adopted tests still there", false, "missing %v", missing)
 				continue
 			}
+			// The final code must pass before the original bug's failure
+			// means anything.
+			final := runReturnedTestsAt(r.Repo, sha, files, nil, "")
+			add(b+": adopted tests pass on the final code", final.Err == nil && !final.Failed && final.Ran > 0 && len(final.Broken) == 0,
+				"err=%v failed=%v ran=%d broken=%q: %s", final.Err, final.Failed, final.Ran, final.Broken, truncate(strings.TrimSpace(final.Output), 600))
+			out, failed, err := runNormal(r.Repo, sha, nil, e.NormalTest)
+			add(b+": "+strings.Join(e.NormalTest, " ")+" passes on the final code", err == nil && !failed, "err=%v failed=%v: %s", err, failed, truncate(strings.TrimSpace(out), 600))
 			run := runReturnedTestsAt(r.Repo, sha, files, overlays, "")
 			add(b+": adopted tests still catch the original bug", run.Err == nil && run.Failed && run.Ran > 0 && len(run.Broken) == 0,
 				"err=%v failed=%v ran=%d broken=%q: %s", run.Err, run.Failed, run.Ran, run.Broken, truncate(strings.TrimSpace(run.Output), 600))
-			out, failed, err := runNormal(r.Repo, sha, overlays, e.NormalTest)
+			out, failed, err = runNormal(r.Repo, sha, overlays, e.NormalTest)
 			add(b+": "+strings.Join(e.NormalTest, " ")+" catches the original bug", err == nil && failed, "err=%v failed=%v: %s", err, failed, truncate(strings.TrimSpace(out), 600))
 		}
 	}

@@ -3,6 +3,7 @@ package eval
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -79,7 +80,10 @@ func runReturnedTestsAt(src, rev string, files []TestFile, overlays []string, br
 	byLang := map[string][]TestFile{}
 	for _, f := range files {
 		p, _ := cleanRepoPath(f.Path)
-		full := filepath.Join(repo, filepath.FromSlash(p))
+		full, err := writablePath(repo, p)
+		if err != nil {
+			return testRun{Err: err}
+		}
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			return testRun{Err: err}
 		}
@@ -129,6 +133,27 @@ func runReturnedTestsAt(src, rev string, files []TestFile, overlays []string, br
 	return out
 }
 
+// writablePath returns where to write the repository-relative path p in
+// repo. It refuses a path that goes through a link, which could point
+// outside the checkout.
+func writablePath(repo, p string) (string, error) {
+	full := repo
+	for _, part := range strings.Split(p, "/") {
+		full = filepath.Join(full, part)
+		fi, err := os.Lstat(full)
+		if errors.Is(err, os.ErrNotExist) {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("%s goes through a link", p)
+		}
+	}
+	return filepath.Join(repo, filepath.FromSlash(p)), nil
+}
+
 func language(p string) string {
 	switch path.Ext(p) {
 	case ".go":
@@ -142,11 +167,18 @@ func language(p string) string {
 }
 
 func runCommand(dir string, name string, args ...string) (string, bool, error) {
+	return runCommandWith(dir, nil, nil, name, args...)
+}
+
+// runCommandWith is runCommand with extra environment variables and extra
+// open files, which the command sees as file descriptors 3 and up.
+func runCommandWith(dir string, env []string, files []*os.File, name string, args ...string) (string, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "PYTHONDONTWRITEBYTECODE=1")
+	cmd.Env = append(append(os.Environ(), "PYTHONDONTWRITEBYTECODE=1"), env...)
+	cmd.ExtraFiles = files
 	var buf bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &buf, &buf
 	err := cmd.Run()
@@ -213,18 +245,38 @@ func runPython(repo string, files []TestFile) testRun {
 	return r
 }
 
-// runShell runs each returned script on its own. A script counts as having
-// run tests when it defines test functions.
+var shTraceCall = regexp.MustCompile(`(?m)^\++ (test_\w+)(?:\s|$)`)
+
+// runShell runs each returned script on its own, tracing it to a separate
+// file, and counts the test functions the trace shows were called. Defining
+// a test function isn't running it.
 func runShell(repo string, files []TestFile) testRun {
 	var r testRun
 	for _, f := range files {
-		out, failed, err := runCommand(repo, "bash", f.Path)
+		trace, err := os.CreateTemp("", "ocx-trace-")
+		if err != nil {
+			return testRun{Err: err}
+		}
+		out, failed, err := runCommandWith(repo, []string{"BASH_XTRACEFD=3"}, []*os.File{trace}, "bash", "-x", f.Path)
+		data, _ := os.ReadFile(trace.Name())
+		trace.Close()
+		os.Remove(trace.Name())
 		if err != nil {
 			return testRun{Err: err, Output: out}
 		}
 		r.Failed = r.Failed || failed
 		r.Output += out
-		r.Ran += len(TestNames(f))
+		defined := map[string]bool{}
+		for _, n := range TestNames(f) {
+			defined[n] = true
+		}
+		called := map[string]bool{}
+		for _, m := range shTraceCall.FindAllStringSubmatch(string(data), -1) {
+			if defined[m[1]] {
+				called[m[1]] = true
+			}
+		}
+		r.Ran += len(called)
 	}
 	return r
 }
@@ -279,7 +331,7 @@ func runnableFiles(ws *Workspace, files []TestFile) []TestFile {
 	var out []TestFile
 	for _, f := range files {
 		p, ok := cleanRepoPath(f.Path)
-		if !ok || seen[p] || existsAt(ws.Work, ws.Head, p) {
+		if !ok || seen[p] || existsAt(ws.Work, ws.Head, p) || linkedAt(ws.Work, ws.Head, p) {
 			continue
 		}
 		seen[p] = true

@@ -154,6 +154,14 @@ func TestPlanCriteria(t *testing.T) {
 
 func TestTestsReportChecks(t *testing.T) {
 	ws := testsRepo(t)
+	if err := os.Symlink("internal", filepath.Join(ws.Work, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	head, err := gitx.CommitAll(ws.Work, "Link a directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws.Head = head
 	plan := TestsExpect{Plan: "docs/plans/0001-things.md"}
 	n := func(v int) *int { return &v }
 	file := func(p string) TestFile { return TestFile{Path: p, Content: goodTest} }
@@ -207,6 +215,7 @@ func TestTestsReportChecks(t *testing.T) {
 		{name: "a path that exists at head", report: func(r *report) { r.files = []TestFile{file("internal/a/a.go")} }, fails: []string{"listed once"}},
 		{name: "a path outside the repository", report: func(r *report) { r.files = []TestFile{file("../x_test.go")} }, fails: []string{"listed once"}},
 		{name: "an absolute path", report: func(r *report) { r.files = []TestFile{file("/tmp/x_test.go")} }, fails: []string{"listed once"}},
+		{name: "a path through a link at head", report: func(r *report) { r.files = []TestFile{file("linked/x_test.go")} }, fails: []string{"goes through a link"}},
 		{name: "a test named for the plan", report: func(r *report) {
 			r.files = []TestFile{{Path: "internal/a/x_test.go", Content: "package a\n\nimport \"testing\"\n\nfunc TestCriterion2(t *testing.T) {}\n"}}
 		}, expect: TestsExpect{NameForbid: []string{`(?i)criteri`}}, fails: []string{"describe behavior"}},
@@ -322,5 +331,19 @@ func TestEditsMustStayInTheAgentsOwnScratchRoot(t *testing.T) {
 		if got := inScratch(c.agent, c.path); got != c.want {
 			t.Errorf("inScratch(%s, %s) = %v, want %v", c.agent, c.path, got, c.want)
 		}
+	}
+}
+
+func TestUnchangedSeesEditsToFilesGitQuotes(t *testing.T) {
+	ws := codeRepo(t, map[string]string{"café.txt": "committed\n"})
+	writeFiles(t, ws.Work, map[string]string{"café.txt": "before\n"})
+	ws.Before = captureState(ws.Work)
+	if ws.Before.Files["café.txt"] == "missing" {
+		t.Fatalf("recorded state can't read café.txt: %v", ws.Before.Files)
+	}
+	writeFiles(t, ws.Work, map[string]string{"café.txt": "after\n"})
+	a := &asserter{ws: ws}
+	if got := failing(a.run(Expect{Unchanged: true})); len(got) == 0 {
+		t.Fatal("an edit to café.txt went unnoticed")
 	}
 }

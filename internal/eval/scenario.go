@@ -179,9 +179,9 @@ type E2E struct {
 	// content, and changes nothing else.
 	AdoptedExactly bool `yaml:"adopted_exactly"`
 	// Buggy are overlays, relative to the scenario directory, that put the
-	// original buggy implementation back. Laid over each pushed head, the
-	// adopted tests on their own must fail, and so must NormalTest, the
-	// project's normal test command.
+	// original buggy implementation back. On each pushed head, the adopted
+	// tests on their own and NormalTest, the project's normal test command,
+	// must pass, and with the overlays laid over it they must both fail.
 	Buggy      []string `yaml:"buggy"`
 	NormalTest []string `yaml:"normal_test"`
 	// RegistrationCommit requires a pushed commit that changes only these

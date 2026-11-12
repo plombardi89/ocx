@@ -277,6 +277,8 @@ func checkTestsReport(ws *Workspace, final string, e TestsExpect) []Check {
 			bad = append(bad, f.Path+" is listed more than once")
 		case existsAt(ws.Work, ws.Head, p):
 			bad = append(bad, f.Path+" already exists at head")
+		case linkedAt(ws.Work, ws.Head, p):
+			bad = append(bad, f.Path+" goes through a link at head")
 		case strings.TrimSpace(f.Content) == "":
 			bad = append(bad, f.Path+" is empty")
 		}
@@ -338,4 +340,17 @@ func gitShow(dir, rev, p string) (string, error) {
 func existsAt(dir, rev, p string) bool {
 	_, err := gitx.Run(dir, "cat-file", "-e", rev+":"+p)
 	return err == nil
+}
+
+// linkedAt reports whether any directory above p is a symbolic link at rev,
+// so writing p in a checkout of rev could land outside it.
+func linkedAt(dir, rev, p string) bool {
+	parts := strings.Split(p, "/")
+	for i := 1; i < len(parts); i++ {
+		out, err := gitx.Run(dir, "ls-tree", rev, "--", strings.Join(parts[:i], "/"))
+		if err == nil && strings.HasPrefix(out, "120000 ") {
+			return true
+		}
+	}
+	return false
 }

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/plombardi89/ocx/internal/config"
+	"github.com/plombardi89/ocx/internal/gitx"
+	"github.com/plombardi89/ocx/internal/stage"
 )
 
 func loadScenario(t *testing.T, root, name string) Scenario {
@@ -99,5 +101,64 @@ func TestStubReportsFitTheirPlans(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Adopting the failing tests and launching the reviewer without fixing the
+// code must not pass the failing-test scenario.
+func TestFailingTestScenarioRejectsAnUnfixedBranch(t *testing.T) {
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	root, err := config.FindRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := loadScenario(t, root, "e2e-test-failed")
+	ws, err := Prepare(root, s, filepath.Join(t.TempDir(), "ws"), stage.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ws.Remove() })
+	f := TestFile{Path: "internal/api/limit_cap_test.go", Content: `package api
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http/httptest"
+	"testing"
+
+	"example.com/shop/internal/store"
+)
+
+func TestListReturnsAtMostOneHundredItems(t *testing.T) {
+	s := store.New()
+	for i := range 130 {
+		if err := s.Put(store.Product{ID: fmt.Sprintf("p%03d", i), Name: "p"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w := httptest.NewRecorder()
+	New(s).ServeHTTP(w, httptest.NewRequest("GET", "/products?limit=500", nil))
+	var body struct{ Items []store.Product }
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Items) > 100 {
+		t.Fatalf("got %d items, want at most 100", len(body.Items))
+	}
+}
+`}
+	writeFiles(t, ws.Work, map[string]string{f.Path: f.Content})
+	if _, err := gitx.CommitAll(ws.Work, "test: add tests for product pagination from its acceptance criteria"); err != nil {
+		t.Fatal(err)
+	}
+	r := report{status: "COMPLETE", criteria: 7, passed: 6, failed: 1, head: ws.Head,
+		results: []string{"1. PASSED", "2. PASSED", "3. FAILED", "4. PASSED", "5. PASSED", "6. PASSED", "7. PASSED"}, files: []TestFile{f}}
+	a := &asserter{ws: ws, dir: s.Dir, tr: &Transcript{Tools: []Part{
+		launch("test-writer", "Test request", r.String()),
+		launch("reviewer", "Review request", ""),
+	}}}
+	got := strings.Join(failing(a.run(s.Expect)), "\n")
+	if !strings.Contains(got, "pass on the final code") {
+		t.Fatalf("an unfixed branch passed the scenario's checks; failures:\n%s", got)
 	}
 }

@@ -3,11 +3,12 @@ package eval
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"text/template"
@@ -46,32 +47,38 @@ type repoState struct {
 	Worktrees            []string
 }
 
-// statusEntry matches a `git status --porcelain` line. Output is trimmed,
-// so the first line may have lost the leading space of its two-letter code.
-var statusEntry = regexp.MustCompile(`^(?:[ MADRCUT?!]{2} |[MADRCUT?!] )(.+)$`)
-
 func captureState(work string) repoState {
 	s := repoState{
 		Head:   gitOut(work, "rev-parse", "HEAD"),
 		Branch: gitOut(work, "branch", "--show-current"),
-		Status: gitOut(work, "status", "--porcelain=v1", "--untracked-files=all"),
 		Files:  map[string]string{},
 	}
-	for _, line := range strings.Split(s.Status, "\n") {
-		m := statusEntry.FindStringSubmatch(line)
-		if m == nil {
+	// NUL-separated, so paths come through unquoted and nothing is trimmed.
+	raw, err := gitRaw(work, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	if err != nil {
+		s.Status = "error: " + err.Error()
+	} else {
+		s.Status = string(raw)
+	}
+	entries := strings.Split(string(raw), "\x00")
+	for i := 0; i < len(entries); i++ {
+		e := entries[i]
+		if len(e) < 4 {
 			continue
 		}
-		p := m[1]
-		if _, to, renamed := strings.Cut(p, " -> "); renamed {
-			p = to
+		code, p := e[:2], e[3:]
+		if strings.ContainsAny(code, "RC") {
+			i++ // the next entry is the path it was renamed or copied from
 		}
-		p = strings.Trim(p, `"`)
-		sum := "missing"
-		if data, err := os.ReadFile(filepath.Join(work, p)); err == nil {
-			sum = fmt.Sprintf("%x", sha256.Sum256(data))
+		data, err := os.ReadFile(filepath.Join(work, p))
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			s.Files[p] = "missing"
+		case err != nil:
+			s.Files[p] = "unreadable: " + err.Error()
+		default:
+			s.Files[p] = fmt.Sprintf("%x", sha256.Sum256(data))
 		}
-		s.Files[p] = sum
 	}
 	for _, line := range strings.Split(gitOut(work, "worktree", "list", "--porcelain"), "\n") {
 		if wt, ok := strings.CutPrefix(line, "worktree "); ok {
@@ -79,6 +86,20 @@ func captureState(work string) repoState {
 		}
 	}
 	return s
+}
+
+// gitRaw runs an isolated git command and returns its output untouched.
+func gitRaw(dir string, args ...string) ([]byte, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = gitx.Env()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return out, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+	}
+	return out, nil
 }
 
 // changes describes how after differs from s, ignoring worktrees.

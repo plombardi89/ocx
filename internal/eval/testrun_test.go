@@ -188,3 +188,40 @@ func TestNoReturnedFilesMeansNoRuns(t *testing.T) {
 		t.Fatalf("checks without files: %+v", checks)
 	}
 }
+
+func TestReturnedFilesAreNeverWrittenThroughALink(t *testing.T) {
+	ws := codeRepo(t, map[string]string{"readme.txt": "x\n"})
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(ws.Work, "tests")); err != nil {
+		t.Fatal(err)
+	}
+	head, err := gitx.CommitAll(ws.Work, "Link the tests directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws.Head = head
+	f := TestFile{Path: "tests/escaped_test.sh", Content: "test_ok() { :; }\ntest_ok\n"}
+
+	if files := runnableFiles(ws, []TestFile{f}); len(files) != 0 {
+		t.Fatalf("a path through a link counts as runnable: %v", files)
+	}
+	if run := runReturnedTests(ws, []TestFile{f}, nil, ""); run.Err == nil {
+		t.Fatal("writing through a link succeeded")
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Fatalf("wrote %d files outside the checkout", len(entries))
+	}
+}
+
+func TestShellTestsCountOnlyWhenCalled(t *testing.T) {
+	ws := codeRepo(t, map[string]string{"readme.txt": "x\n"})
+	defined := TestFile{Path: "tests/defined_test.sh", Content: "set -euo pipefail\ntest_checks_output() { return 1; }\n"}
+	got := failing(checkReturnedTests(ws, t.TempDir(), TestsReport{Passed: 1, Files: []TestFile{defined}}, TestsExpect{}))
+	if !strings.Contains(strings.Join(got, "\n"), "run on head") {
+		t.Fatalf("a test function that's never called counted as run: %v", got)
+	}
+	called := TestFile{Path: defined.Path, Content: "set -euo pipefail\ntest_checks_output() { :; }\ntest_checks_output\n"}
+	if got := failing(checkReturnedTests(ws, t.TempDir(), TestsReport{Passed: 1, Files: []TestFile{called}}, TestsExpect{})); len(got) > 0 {
+		t.Fatalf("a called test function: %v", got)
+	}
+}

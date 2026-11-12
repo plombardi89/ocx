@@ -118,9 +118,9 @@ func TestBuildSideChecks(t *testing.T) {
 		{name: "adopted exactly, fixed, and still catching the bug", commits: adoptAndFix,
 			e: E2E{AdoptedExactly: true, Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."}, RegistrationCommit: []string{"calc/calc.go"}}},
 		{name: "adopted with a changed expectation", commits: []map[string]string{{test.Path: weakened.Content}, fix},
-			e: E2E{AdoptedExactly: true}, want: []string{"adopted the returned test files exactly"}},
+			e: E2E{AdoptedExactly: true}, want: []string{"adopted the returned test files byte for byte"}},
 		{name: "adopted together with the fix", commits: []map[string]string{{test.Path: test.Content, "calc/calc.go": addCorrect}},
-			e: E2E{AdoptedExactly: true}, want: []string{"adopted the returned test files exactly"}},
+			e: E2E{AdoptedExactly: true}, want: []string{"adopted the returned test files byte for byte"}},
 		{name: "weakened after adopting", commits: append(adoptAndFix, map[string]string{test.Path: weakened.Content}),
 			e: E2E{Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."}}, want: []string{"adopted tests still catch the original bug", "catches the original bug"}},
 		{name: "no report with files", commits: adoptAndFix, output: "no report",
@@ -236,5 +236,37 @@ func TestChecksUseTheLocalBranchWhenNothingWasPushed(t *testing.T) {
 	got := strings.Join(failing(a.e2e(E2E{ApprovedIfPushed: true})), "\n")
 	if !strings.Contains(got, "anything pushed is approved") {
 		t.Fatalf("unapproved push: %v", got)
+	}
+}
+
+func TestAdoptionMustMatchEveryByte(t *testing.T) {
+	f := goFile(goTest("TestAddingTwoAndThree", "2", "3", "5"))
+	for name, committed := range map[string]string{
+		"without the final newline":  strings.TrimSuffix(f.Content, "\n"),
+		"with a leading blank line":  "\n" + f.Content,
+		"with a trailing blank line": f.Content + "\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			ws := branchRepo(t, false, map[string]string{f.Path: committed})
+			a := &asserter{ws: ws, tr: &Transcript{Tools: []Part{launch("test-writer", "Test request", returnedReport(f))}}}
+			if got := failing(a.buildSide(E2E{AdoptedExactly: true}, nil)); len(got) == 0 {
+				t.Fatal("adoption accepted a file that differs from the returned one")
+			}
+		})
+	}
+}
+
+func TestTheFinalCodeMustPassTheAdoptedTests(t *testing.T) {
+	dir := t.TempDir()
+	buggy := overlay(t, dir, "buggy", map[string]string{"calc/calc.go": addWrong})
+	test := goFile(goTest("TestAddingTwoAndThree", "2", "3", "5"))
+	// The tests are adopted, but the code is never fixed.
+	ws := branchRepo(t, false, map[string]string{test.Path: test.Content})
+	a := &asserter{ws: ws, dir: dir, tr: &Transcript{Tools: []Part{launch("test-writer", "Test request", returnedReport(test))}}}
+	got := strings.Join(failing(a.buildSide(E2E{Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."}}, nil)), "\n")
+	for _, want := range []string{"adopted tests pass on the final code", "passes on the final code"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("no failing check %q; failures:\n%s", want, got)
+		}
 	}
 }
