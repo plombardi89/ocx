@@ -27,6 +27,8 @@ probes:
   - { agent: reviewer, action: websearch, resource: "anything", expect: deny }
   - { agent: reviewer, action: question, resource: "*", expect: deny }
   - { agent: reviewer, action: skill, resource: code-review, expect: allow }
+  - { agent: reviewer, action: shell, resource: "git notes --ref=ocreview add -f -F /tmp/opencode/reviews/shop-abc1234-kqvx-note.md abc1234", expect: allow }
+  - { agent: reviewer, action: edit, resource: /tmp/opencode/reviews/shop-abc1234-kqvx-note.md, expect: allow }
   - { agent: reviewer, action: skill, resource: writing-style, expect: allow }
   - { agent: reviewer, action: skill, resource: git-workflow, expect: deny }
   - { agent: reviewer, action: external_directory, resource: "/etc/*", expect: deny }

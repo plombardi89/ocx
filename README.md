@@ -66,6 +66,8 @@ The reviewer enforces these with a separate finding category:
 | MINOR | No | No |
 | NIT | No | No |
 
+When the change is itself a guardrail for cooperative agents, such as a review gate, a permission rule, or an eval check, a way around it that only an agent deliberately trying to defeat it would use is at most MINOR. The reviewer reports it so Phil can decide, without blocking on it.
+
 `make check` applies the mechanical parts of the rules to this repository: no letter or roman-numeral list markers in our Markdown, and no Go or shell comments that point at plans, reviews, or requests.
 
 ## Review harnesses
@@ -131,6 +133,7 @@ Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run even
 | `reviewer-python-planted-bug` | Python: a mutable default list shared by every product and mutated in place; the tests only ever add one product |
 | `reviewer-shell-planted-bug` | Shell: dropped `set -euo pipefail` and quoting; with spaces in a path the copy fails but the script reports success and exits 0 |
 | `reviewer-writing-rules` | Correct, tested code whose comments, test name, and doc break the writing rules: WRITING findings, and the one valid TODO listed for Phil |
+| `reviewer-guardrail-gaming` | A pre-push hook that requires an approving review note: approve, with the agent writing the note itself reported as MINOR, and record the verdict. Reports usually mention `.git/hooks`, which a policy protects, so this usually also covers notes that couldn't be passed inline |
 | `critic-vague-plan` | Plan with uncheckable criteria ("fast", "gracefully") and an undefined matching rule: REVISE |
 | `critic-missing-edge-cases` | Concrete plan whose own goal needs insufficient-stock, concurrency, and quantity rules it never states: REVISE |
 | `critic-good-plan` | Complete, checkable plan: APPROVE with no invented gaps or questions |
