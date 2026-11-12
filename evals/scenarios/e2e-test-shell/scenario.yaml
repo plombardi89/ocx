@@ -1,5 +1,5 @@
 name: e2e-test-shell
-description: The backup-manifest plan and its planted-bug script are committed. With the /write-tests text, build adopts the test-writer's files exactly, registers them in tests/run.sh in a commit of their own, fixes the script, and reaches review with a branch whose make test still catches the original bug. Pushing isn't required; anything pushed must be approved.
+description: The backup-manifest plan and its planted-bug script are committed. With the /write-tests text, build adopts the test-writer's files exactly, registers them with the test runner (tests/run.sh or the Makefile) in a commit of their own, fixes the script, and reaches review with a branch whose make test still catches the original bug. Pushing isn't required; anything pushed must be approved.
 fixture: sh-tools
 tags: [tests, e2e, shell]
 agent: build
@@ -35,6 +35,6 @@ expect:
           - "(?i)\\b(focus on|edge cases?|make sure)\\b"
     dispatch_order: [test-writer, reviewer]
     adopted_exactly: true
-    registration_commit: [tests/run.sh]
+    registration_commit: [tests/run.sh, Makefile]
     buggy: [../_shared/backup-planted]
     normal_test: [make, test]

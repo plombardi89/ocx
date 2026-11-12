@@ -1,5 +1,5 @@
 name: test-writer-python
-description: Python tagging change whose default tag list is shared by every product and changed in place. The test-writer's tests must fail on it and pass on the correct code.
+description: Python tagging change whose default tag list is shared by every product and changed in place. The test-writer's tests must fail on it and pass on the correct code; the report gives expected and actual results, and naming the cause is the reviewer's job.
 fixture: py-service
 tags: [tests, python]
 agent: test-writer
@@ -18,8 +18,6 @@ expect:
   skill_loaded: test-writing
   edits_in_scratch_only: true
   unchanged: true
-  mentions:
-    - "(?i)(mutable default|default (argument|list|value)|shared (list|default)|same list( object)?)"
   tests:
     plan: docs/plans/0001-product-tags.md
     status: COMPLETE
