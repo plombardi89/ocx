@@ -165,32 +165,20 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 		for _, r := range results {
 			b := r.Name
 			sha := gitOut(r.Repo, "rev-parse", r.Ref)
-			var files []TestFile
 			var missing []string
 			for _, f := range adopted {
-				content, err := gitRaw(r.Repo, "cat-file", "blob", sha+":"+f.Path)
-				if err != nil {
+				if !existsAt(r.Repo, sha, f.Path) {
 					missing = append(missing, f.Path)
-					continue
 				}
-				files = append(files, TestFile{Path: f.Path, Content: string(content)})
 			}
-			if len(missing) > 0 {
-				add(b+": adopted tests still there", false, "missing %v", missing)
-				continue
-			}
+			add(b+": adopted tests still there", len(missing) == 0, "missing %v", missing)
 			// The final code must pass before the original bug's failure
 			// means anything.
-			final := runReturnedTestsAt(r.Repo, sha, files, nil, "")
-			add(b+": adopted tests pass on the final code", final.Err == nil && !final.Failed && final.Ran > 0 && len(final.Broken) == 0,
-				"err=%v failed=%v ran=%d broken=%q: %s", final.Err, final.Failed, final.Ran, final.Broken, truncate(strings.TrimSpace(final.Output), 600))
-			out, failed, err := runNormal(r.Repo, sha, nil, e.NormalTest)
-			add(b+": "+strings.Join(e.NormalTest, " ")+" passes on the final code", err == nil && !failed, "err=%v failed=%v: %s", err, failed, truncate(strings.TrimSpace(out), 600))
-			run := runReturnedTestsAt(r.Repo, sha, files, overlays, "")
-			add(b+": adopted tests still catch the original bug", run.Err == nil && run.Failed && run.Ran > 0 && len(run.Broken) == 0,
-				"err=%v failed=%v ran=%d broken=%q: %s", run.Err, run.Failed, run.Ran, run.Broken, truncate(strings.TrimSpace(run.Output), 600))
-			out, failed, err = runNormal(r.Repo, sha, overlays, e.NormalTest)
-			add(b+": "+strings.Join(e.NormalTest, " ")+" catches the original bug", err == nil && failed, "err=%v failed=%v: %s", err, failed, truncate(strings.TrimSpace(out), 600))
+			command := strings.Join(e.NormalTest, " ")
+			out, failed, err := runTests(r.Repo, sha, nil, nil, e.NormalTest)
+			add(b+": "+command+" passes on the final code", err == nil && !failed, "err=%v: %s", err, truncate(strings.TrimSpace(out), 600))
+			out, failed, err = runTests(r.Repo, sha, overlays, nil, e.NormalTest)
+			add(b+": "+command+" catches the original bug", err == nil && failed, "err=%v: %s", err, truncate(strings.TrimSpace(out), 600))
 		}
 	}
 
@@ -246,15 +234,4 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 		add(fmt.Sprintf("pushed %s mentions %s", m.Path, m.Pattern), ok, "not found in any pushed branch")
 	}
 	return checks
-}
-
-// runNormal runs the project's normal test command on rev with the
-// overlays laid over it.
-func runNormal(src, rev string, overlays []string, command []string) (string, bool, error) {
-	repo, cleanup, err := checkout(src, rev, overlays)
-	defer cleanup()
-	if err != nil {
-		return "", false, err
-	}
-	return runCommand(repo, command[0], command[1:]...)
 }

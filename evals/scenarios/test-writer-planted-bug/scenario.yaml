@@ -23,6 +23,7 @@ expect:
     - "(?i)\\b100\\b"
   tests:
     plan: docs/plans/0001-product-pagination.md
+    command: [go, test, -count=1, ./...]
     status: COMPLETE
     gaps: 0
     not_run: 0

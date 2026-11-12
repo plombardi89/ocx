@@ -122,7 +122,7 @@ func TestBuildSideChecks(t *testing.T) {
 		{name: "adopted together with the fix", commits: []map[string]string{{test.Path: test.Content, "calc/calc.go": addCorrect}},
 			e: E2E{AdoptedExactly: true}, want: []string{"adopted the returned test files byte for byte"}},
 		{name: "weakened after adopting", commits: append(adoptAndFix, map[string]string{test.Path: weakened.Content}),
-			e: E2E{Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."}}, want: []string{"adopted tests still catch the original bug", "catches the original bug"}},
+			e: E2E{Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."}}, want: []string{"catches the original bug"}},
 		{name: "no report with files", commits: adoptAndFix, output: "no report",
 			e: E2E{AdoptedExactly: true}, want: []string{"the last test-writer report has test files"}},
 		{name: "no registration-only commit", commits: []map[string]string{{test.Path: test.Content, "calc/calc.go": addCorrect}},
@@ -256,7 +256,7 @@ func TestAdoptionMustMatchEveryByte(t *testing.T) {
 	}
 }
 
-func TestTheFinalCodeMustPassTheAdoptedTests(t *testing.T) {
+func TestTheFinalCodeMustPassItsTests(t *testing.T) {
 	dir := t.TempDir()
 	buggy := overlay(t, dir, "buggy", map[string]string{"calc/calc.go": addWrong})
 	test := goFile(goTest("TestAddingTwoAndThree", "2", "3", "5"))
@@ -264,7 +264,7 @@ func TestTheFinalCodeMustPassTheAdoptedTests(t *testing.T) {
 	ws := branchRepo(t, false, map[string]string{test.Path: test.Content})
 	a := &asserter{ws: ws, dir: dir, tr: &Transcript{Tools: []Part{launch("test-writer", "Test request", returnedReport(test))}}}
 	got := strings.Join(failing(a.buildSide(E2E{Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."}}, nil)), "\n")
-	for _, want := range []string{"adopted tests pass on the final code", "passes on the final code"} {
+	for _, want := range []string{"passes on the final code"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("no failing check %q; failures:\n%s", want, got)
 		}

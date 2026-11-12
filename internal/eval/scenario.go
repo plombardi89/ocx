@@ -128,14 +128,16 @@ type TestsExpect struct {
 	// Go file, in the returned files may match.
 	NameForbid []string `yaml:"name_forbid"`
 
-	// When the report has test files, the eval runs them, and only them, on
-	// Head; they must fail exactly when the report has FAILED criteria.
-	// Broken overrides the language's pattern for output that means the
-	// test code itself is broken. Fixed are overlays, relative to the
-	// scenario directory, with a correct implementation the tests must pass
-	// on. Each mutant's overlay breaks the implementation in a way the tests
-	// must catch.
-	Broken  string   `yaml:"broken"`
+	// Command runs the project's tests, with "{files}" standing for the
+	// returned files' paths where a runner doesn't find new tests itself.
+	// When the report has test files, the eval runs Command with and
+	// without them and credits the returned tests only with the
+	// difference: on Head they must fail exactly when the report has
+	// FAILED criteria. Fixed are overlays, relative to the scenario
+	// directory, with a correct implementation the tests must pass on.
+	// Each mutant's overlay breaks the implementation in a way the existing
+	// tests miss and the returned tests must catch.
+	Command []string `yaml:"command"`
 	Fixed   []string `yaml:"fixed"`
 	Mutants []Mutant `yaml:"mutants"`
 }
@@ -180,8 +182,8 @@ type E2E struct {
 	AdoptedExactly bool `yaml:"adopted_exactly"`
 	// Buggy are overlays, relative to the scenario directory, that put the
 	// original buggy implementation back. On each pushed head, the adopted
-	// tests on their own and NormalTest, the project's normal test command,
-	// must pass, and with the overlays laid over it they must both fail.
+	// test files must still exist, and NormalTest, the project's normal test
+	// command, must pass, and fail with the overlays laid over it.
 	Buggy      []string `yaml:"buggy"`
 	NormalTest []string `yaml:"normal_test"`
 	// RegistrationCommit requires a pushed commit that changes only these
@@ -347,8 +349,8 @@ func (s Scenario) Validate(root string) error {
 	patterns := append([]string{}, s.Expect.Mentions...)
 	if t := s.Expect.Tests; t != nil {
 		patterns = append(patterns, t.NameForbid...)
-		if t.Broken != "" {
-			patterns = append(patterns, t.Broken)
+		if t.Status != "INCOMPLETE" && len(t.Command) == 0 {
+			errs = append(errs, fmt.Errorf("%s: tests need a command to run the returned tests", prefix))
 		}
 		overlays := append([]string{}, t.Fixed...)
 		for i, m := range t.Mutants {

@@ -20,6 +20,7 @@ expect:
   unchanged: true
   tests:
     plan: docs/plans/0001-product-tags.md
+    command: [python3, -m, unittest, discover, -s, tests]
     status: COMPLETE
     gaps: 0
     not_run: 0

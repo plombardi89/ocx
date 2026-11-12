@@ -7,10 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
-	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -18,27 +15,9 @@ import (
 	"github.com/plombardi89/ocx/internal/stage"
 )
 
-// Output that means the returned test code itself is broken, rather than
-// that a test found a bug, by language.
-var defaultBroken = map[string]string{
-	"go":     `\[build failed\]|\[setup failed\]`,
-	"python": `(?m)\b(SyntaxError|IndentationError|ImportError|ModuleNotFoundError)\b`,
-	"shell":  `(?m)syntax error|command not found`,
-}
-
-var (
-	goRanTest = regexp.MustCompile(`(?m)^=== RUN\s+(Test\w+)`)
-	pyRan     = regexp.MustCompile(`(?m)^Ran (\d+) tests?`)
-)
-
-// testRun is the outcome of running the returned tests once.
-type testRun struct {
-	Failed bool
-	Ran    int // tests seen running; shell counts the test functions defined
-	Broken []string
-	Output string
-	Err    error // the tests couldn't be run at all
-}
+// FilesArg stands for the returned files' paths in a scenario's test
+// command, for runners that don't find new tests by themselves.
+const FilesArg = "{files}"
 
 // checkout clones src into a temporary directory, checks out rev, and lays
 // the overlays over it in order. cleanup removes the directory.
@@ -63,74 +42,40 @@ func checkout(src, rev string, overlays []string) (repo string, cleanup func(), 
 	return repo, cleanup, nil
 }
 
-// runReturnedTests runs the returned tests on the workspace's Head with the
-// overlays laid over it.
-func runReturnedTests(ws *Workspace, files []TestFile, overlays []string, broken string) testRun {
-	return runReturnedTestsAt(ws.Work, ws.Head, files, overlays, broken)
-}
-
-// runReturnedTestsAt checks out rev of src with the overlays, adds the
-// returned test files, and runs only those tests.
-func runReturnedTestsAt(src, rev string, files []TestFile, overlays []string, broken string) testRun {
+// runTests checks out rev of src with the overlays laid over it, writes the
+// files, and runs command there. FilesArg in command becomes the files'
+// paths, or nothing when there are none. failed reports whether the command
+// exited with an error.
+func runTests(src, rev string, overlays []string, files []TestFile, command []string) (out string, failed bool, err error) {
 	repo, cleanup, err := checkout(src, rev, overlays)
 	defer cleanup()
 	if err != nil {
-		return testRun{Err: err}
+		return "", false, err
 	}
-	byLang := map[string][]TestFile{}
+	var paths []string
 	for _, f := range files {
 		p, _ := cleanRepoPath(f.Path)
 		full, err := writablePath(repo, p)
 		if err != nil {
-			return testRun{Err: err}
+			return "", false, err
 		}
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			return testRun{Err: err}
+			return "", false, err
 		}
 		if err := os.WriteFile(full, []byte(f.Content), 0o644); err != nil {
-			return testRun{Err: err}
+			return "", false, err
 		}
-		lang := language(p)
-		byLang[lang] = append(byLang[lang], TestFile{Path: p, Content: f.Content})
+		paths = append(paths, p)
 	}
-
-	var out testRun
-	var output strings.Builder
-	langs := make([]string, 0, len(byLang))
-	for l := range byLang {
-		langs = append(langs, l)
+	var args []string
+	for _, a := range command[1:] {
+		if a == FilesArg {
+			args = append(args, paths...)
+		} else {
+			args = append(args, a)
+		}
 	}
-	sort.Strings(langs)
-	for _, lang := range langs {
-		var r testRun
-		switch lang {
-		case "go":
-			r = runGo(repo, byLang[lang])
-		case "python":
-			r = runPython(repo, byLang[lang])
-		case "shell":
-			r = runShell(repo, byLang[lang])
-		default:
-			r = testRun{Err: fmt.Errorf("can't run %s files", lang)}
-		}
-		if r.Err != nil {
-			return r
-		}
-		pattern := broken
-		if pattern == "" {
-			pattern = defaultBroken[lang]
-		}
-		if pattern != "" {
-			for _, m := range regexp.MustCompile(pattern).FindAllString(r.Output, 5) {
-				out.Broken = append(out.Broken, m)
-			}
-		}
-		out.Failed = out.Failed || r.Failed
-		out.Ran += r.Ran
-		output.WriteString(r.Output)
-	}
-	out.Output = output.String()
-	return out
+	return runCommand(repo, command[0], args...)
 }
 
 // writablePath returns where to write the repository-relative path p in
@@ -154,31 +99,12 @@ func writablePath(repo, p string) (string, error) {
 	return filepath.Join(repo, filepath.FromSlash(p)), nil
 }
 
-func language(p string) string {
-	switch path.Ext(p) {
-	case ".go":
-		return "go"
-	case ".py":
-		return "python"
-	case ".sh", ".bash":
-		return "shell"
-	}
-	return path.Ext(p)
-}
-
 func runCommand(dir string, name string, args ...string) (string, bool, error) {
-	return runCommandWith(dir, nil, nil, name, args...)
-}
-
-// runCommandWith is runCommand with extra environment variables and extra
-// open files, which the command sees as file descriptors 3 and up.
-func runCommandWith(dir string, env []string, files []*os.File, name string, args ...string) (string, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
-	cmd.Env = append(append(os.Environ(), "PYTHONDONTWRITEBYTECODE=1"), env...)
-	cmd.ExtraFiles = files
+	cmd.Env = append(os.Environ(), "PYTHONDONTWRITEBYTECODE=1")
 	var buf bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &buf, &buf
 	err := cmd.Run()
@@ -191,112 +117,13 @@ func runCommandWith(dir string, env []string, files []*os.File, name string, arg
 	return buf.String(), false, err
 }
 
-// runGo runs the returned test functions, package by package.
-func runGo(repo string, files []TestFile) testRun {
-	byPkg := map[string][]string{}
-	for _, f := range files {
-		pkg := "./" + path.Dir(f.Path)
-		byPkg[pkg] = append(byPkg[pkg], TestNames(f)...)
-	}
-	pkgs := make([]string, 0, len(byPkg))
-	for p := range byPkg {
-		pkgs = append(pkgs, p)
-	}
-	sort.Strings(pkgs)
-	var r testRun
-	for _, pkg := range pkgs {
-		names := byPkg[pkg]
-		if len(names) == 0 {
-			continue
-		}
-		pattern := "^(" + strings.Join(names, "|") + ")$"
-		out, failed, err := runCommand(repo, "go", "test", "-count=1", "-v", "-run", pattern, pkg)
-		if err != nil {
-			return testRun{Err: err, Output: out}
-		}
-		r.Failed = r.Failed || failed
-		r.Output += out
-		for _, m := range goRanTest.FindAllStringSubmatch(out, -1) {
-			for _, n := range names {
-				if m[1] == n {
-					r.Ran++
-				}
-			}
-		}
-	}
-	return r
-}
-
-// pyRunner runs only the test classes each named module defines itself. A
-// test class a module imports, such as an existing one it reuses a helper
-// from, belongs to its own module and doesn't run.
-const pyRunner = `import importlib, sys, unittest
-suite = unittest.TestSuite()
-for name in sys.argv[1:]:
-    module = importlib.import_module(name)
-    for obj in vars(module).values():
-        if isinstance(obj, type) and issubclass(obj, unittest.TestCase) and obj.__module__ == name:
-            suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(obj))
-result = unittest.TextTestRunner(verbosity=2).run(suite)
-sys.exit(0 if result.wasSuccessful() else 1)
-`
-
-// runPython runs the test classes the returned modules define, from the
-// repository root.
-func runPython(repo string, files []TestFile) testRun {
-	var modules []string
-	for _, f := range files {
-		modules = append(modules, strings.ReplaceAll(strings.TrimSuffix(f.Path, ".py"), "/", "."))
-	}
-	out, failed, err := runCommand(repo, "python3", append([]string{"-c", pyRunner}, modules...)...)
-	if err != nil {
-		return testRun{Err: err, Output: out}
-	}
-	r := testRun{Failed: failed, Output: out}
-	if m := pyRan.FindStringSubmatch(out); m != nil {
-		fmt.Sscan(m[1], &r.Ran)
-	}
-	return r
-}
-
-var shTraceCall = regexp.MustCompile(`(?m)^\++ (test_\w+)(?:\s|$)`)
-
-// runShell runs each returned script on its own, tracing it to a separate
-// file, and counts the test functions the trace shows were called. Defining
-// a test function isn't running it.
-func runShell(repo string, files []TestFile) testRun {
-	var r testRun
-	for _, f := range files {
-		trace, err := os.CreateTemp("", "ocx-trace-")
-		if err != nil {
-			return testRun{Err: err}
-		}
-		out, failed, err := runCommandWith(repo, []string{"BASH_XTRACEFD=3"}, []*os.File{trace}, "bash", "-x", f.Path)
-		data, _ := os.ReadFile(trace.Name())
-		trace.Close()
-		os.Remove(trace.Name())
-		if err != nil {
-			return testRun{Err: err, Output: out}
-		}
-		r.Failed = r.Failed || failed
-		r.Output += out
-		defined := map[string]bool{}
-		for _, n := range TestNames(f) {
-			defined[n] = true
-		}
-		called := map[string]bool{}
-		for _, m := range shTraceCall.FindAllStringSubmatch(string(data), -1) {
-			if defined[m[1]] {
-				called[m[1]] = true
-			}
-		}
-		r.Ran += len(called)
-	}
-	return r
-}
-
-// checkReturnedTests runs a report's test files on Head, on each correct
-// implementation, and on each mutant. Overlay paths are relative to dir.
+// checkReturnedTests judges a report's test files by the difference they
+// make to the scenario's test command, the same for every language. A
+// failure counts for the returned tests only when the command fails with
+// them and passes without them, so nothing about which tests run, or what
+// the returned tests call, can give them credit for what existing tests
+// already catch. The checks run on Head, on each correct implementation,
+// and on each mutant; overlay paths are relative to dir.
 func checkReturnedTests(ws *Workspace, dir string, r TestsReport, e TestsExpect) []Check {
 	var checks []Check
 	add := func(name string, ok bool, detail string, args ...any) {
@@ -306,33 +133,40 @@ func checkReturnedTests(ws *Workspace, dir string, r TestsReport, e TestsExpect)
 	if len(files) == 0 {
 		return nil
 	}
-	resolve := func(o string) string {
-		if filepath.IsAbs(o) {
-			return o
-		}
-		return filepath.Join(dir, o)
-	}
-	excerpt := func(run testRun) string { return truncate(strings.TrimSpace(run.Output), 600) }
-
-	head := runReturnedTests(ws, files, nil, e.Broken)
-	if head.Err != nil {
-		add("returned tests run on head", false, "%v: %s", head.Err, excerpt(head))
+	if len(e.Command) == 0 {
+		add("scenario has a test command", false, "set tests.command to run the returned tests")
 		return checks
 	}
-	add("returned tests run on head", head.Ran > 0, "no returned test ran: %s", excerpt(head))
-	add("returned test code isn't broken", len(head.Broken) == 0, "%q in: %s", head.Broken, excerpt(head))
-	add("returned tests fail on head if and only if a criterion FAILED", head.Failed == (r.Failed > 0),
-		"run failed=%v, report failed=%d: %s", head.Failed, r.Failed, excerpt(head))
+	resolve := func(o string) []string {
+		if o == "" {
+			return nil
+		}
+		if filepath.IsAbs(o) {
+			return []string{o}
+		}
+		return []string{filepath.Join(dir, o)}
+	}
+	run := func(overlay string, with []TestFile) (string, bool, error) {
+		return runTests(ws.Work, ws.Head, resolve(overlay), with, e.Command)
+	}
+	excerpt := func(out string) string { return truncate(strings.TrimSpace(out), 600) }
+
+	out, failed, err := run("", nil)
+	add("test command passes on head without the returned tests", err == nil && !failed, "err=%v: %s", err, excerpt(out))
+	out, failed, err = run("", files)
+	add("returned tests fail on head if and only if a criterion FAILED", err == nil && failed == (r.Failed > 0),
+		"err=%v failed=%v, report failed=%d: %s", err, failed, r.Failed, excerpt(out))
 
 	for _, o := range e.Fixed {
-		run := runReturnedTests(ws, files, []string{resolve(o)}, e.Broken)
-		add("returned tests pass with "+o, run.Err == nil && !run.Failed && run.Ran > 0 && len(run.Broken) == 0,
-			"err=%v failed=%v ran=%d: %s", run.Err, run.Failed, run.Ran, excerpt(run))
+		out, failed, err := run(o, files)
+		add("returned tests pass with "+o, err == nil && !failed, "err=%v: %s", err, excerpt(out))
 	}
 	for _, m := range e.Mutants {
-		run := runReturnedTests(ws, files, []string{resolve(m.Overlay)}, e.Broken)
-		add("returned tests catch mutant "+m.Name, run.Err == nil && run.Failed && len(run.Broken) == 0,
-			"err=%v failed=%v broken=%q: %s", run.Err, run.Failed, run.Broken, excerpt(run))
+		out, failed, err := run(m.Overlay, nil)
+		add("existing tests miss mutant "+m.Name, err == nil && !failed,
+			"the scenario's mutant is caught without the returned tests, so it can't measure them: err=%v: %s", err, excerpt(out))
+		out, failed, err = run(m.Overlay, files)
+		add("returned tests catch mutant "+m.Name, err == nil && failed, "err=%v: %s", err, excerpt(out))
 	}
 	return checks
 }

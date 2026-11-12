@@ -66,7 +66,7 @@ func (s *Store) All() []Product {
 	for _, p := range s.products {
 		out = append(out, p)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
 

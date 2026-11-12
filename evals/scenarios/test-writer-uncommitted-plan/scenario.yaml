@@ -21,6 +21,7 @@ expect:
   unchanged: true
   tests:
     plan: docs/plans/0001-product-pagination.md
+    command: [go, test, -count=1, ./...]
     status: COMPLETE
     passed: 7
     failed: 0

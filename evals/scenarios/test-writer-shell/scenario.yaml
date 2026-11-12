@@ -22,6 +22,7 @@ expect:
     - "(?is)## How to run.*tests/run\\.sh"
   tests:
     plan: docs/plans/0001-backup-manifest.md
+    command: [sh, -c, 'make test && for f in "$@"; do bash "$f" || exit 1; done', _, "{files}"]
     status: COMPLETE
     gaps: 0
     not_run: 0

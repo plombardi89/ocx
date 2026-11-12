@@ -169,8 +169,8 @@ Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run even
 | `consultant-second-opinion` | The same bug after three attempts that all looked elsewhere: the consultant must question their shared assumption |
 | `e2e-debug-flow` | build reproduces the bug, fixes it in the store with a regression test, gets it reviewed, and pushes a `fix/` branch |
 | `test-writer-planted-bug` | The pagination change that ignores the 100-item cap and panics past the end: those criteria FAILED, and the tests pass on the correct code |
-| `test-writer-clean` | The correct pagination change: 7 of 7 PASSED, and the tests catch five mutants (no cap, a panic past the end, a default of 10, items not sorted by ID, `total` counting the page) |
-| `test-writer-vague-plan` | The split plan plus "Splitting is fast, even for large n.": that criterion is a GAP, the other six PASSED, and two mutants are caught |
+| `test-writer-clean` | The correct pagination change: 7 of 7 PASSED, and the tests catch five mutants the existing tests miss (no cap, a panic past the end, a default of 10, items sorted by name instead of ID, `total` capped at 100) |
+| `test-writer-vague-plan` | The split code without its tests, and a plan that adds "Splitting is fast, even for large n.": that criterion is a GAP, the other six PASSED, and two mutants are caught |
 | `test-writer-python` | The tagging change that shares one default list: that criterion FAILED, and the tests pass on the correct code |
 | `test-writer-shell` | The backup-manifest change that breaks on paths with spaces: FAILED, the tests pass on the correct script, and How to run says to register them in `tests/run.sh` |
 | `test-writer-broken-head` | A Head that doesn't compile: INCOMPLETE, every criterion NOT_RUN, no test files |
@@ -189,7 +189,11 @@ Fixtures: `go-service` (Go), `py-service` (Python, standard-library `unittest`),
 
 Scenarios can stack several commits on a branch or on main, seed earlier review notes, and layer base overlays (`base_overlays:`, `commits:` with `overlays:` and `note:`); shared material lives in `evals/scenarios/_shared/`. They can also leave an uncommitted change (`uncommitted:`) and stub an agent so each launch returns the next of a set of fixed reports (`stub_agents:`).
 
-Test-writer scenarios don't trust the report: the eval writes the returned test files into a fresh checkout of Head and runs only those tests. They must fail exactly when the report has FAILED criteria, pass on the scenario's correct implementation (`fixed:`), and fail on each of its mutants (`mutants:`), even where an existing test would also catch the mutant.
+Test-writer scenarios don't trust the report. The eval runs the scenario's test command (`command:`) in a fresh checkout of Head, with and without the returned test files, and credits the returned tests only with the difference, the same way for every language:
+
+1. Without them the command passes; with them it fails exactly when the report has FAILED criteria.
+2. With the scenario's correct implementation (`fixed:`), it passes with them.
+3. With each of the scenario's mutants (`mutants:`), it passes without them, so the existing tests miss the mutant, and fails with them.
 
 ## Models
 
@@ -242,7 +246,7 @@ Astra stays the critic: it ties Sol on quality, and using a different model at e
 
 `make bakeoff TAG=tests` ran the 5 test-writer comparison scenarios 3 times each on 3 models (45 runs, 2026-11-12). Every model flagged the same criteria on every planted bug and reported the vague criterion as a GAP every time.
 
-| Model | Passed | Mean time | Mutants caught in `test-writer-clean` |
+| Model | Passed | Mean time | Mutants caught in `test-writer-clean` (the earlier set) |
 | --- | --- | --- | --- |
 | Claude Sonnet 5.5 (xhigh) | 15/15 | 3m37s | 15/15 |
 | GPT-6.1 Sol (xhigh) | 13/15 | 4m47s | 14/15 |

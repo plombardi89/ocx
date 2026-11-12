@@ -51,16 +51,28 @@ const (
 	// checks Add(0, 0) doesn't.
 	addOffByOne  = "package calc\n\nfunc Add(a, b int) int {\n\tif a > 0 {\n\t\treturn a + b + 1\n\t}\n\treturn a + b\n}\n"
 	addAlwaysOne = "package calc\n\nfunc Add(a, b int) int { return 1 }\n"
+	// The existing test, which checks Add(2, 3), misses this one.
+	addZeroIsOne = "package calc\n\nfunc Add(a, b int) int {\n\tif a == 0 && b == 0 {\n\t\treturn 1\n\t}\n\treturn a + b\n}\n"
 	addWrong     = "package calc\n\nfunc Add(a, b int) int { return a - b }\n"
 )
 
+// existingAddTest is the repository's own test. It checks Add(2, 3) only,
+// so it misses addZeroIsOne and catches addOffByOne and addWrong.
+const existingAddTest = "package calc\n\nimport \"testing\"\n\nfunc TestAddsTwoNumbers(t *testing.T) {\n\tif Add(2, 3) != 5 {\n\t\tt.Fatal(Add(2, 3))\n\t}\n}\n"
+
 func goRepo(t *testing.T, impl string) *Workspace {
+	return goRepoWith(t, impl, existingAddTest)
+}
+
+func goRepoWith(t *testing.T, impl, existing string) *Workspace {
 	return codeRepo(t, map[string]string{
 		"go.mod":            "module example.com/m\n\ngo 1.22\n",
 		"calc/calc.go":      impl,
-		"calc/calc_test.go": "package calc\n\nimport \"testing\"\n\nfunc TestAddsTwoNumbers(t *testing.T) {\n\tif Add(2, 3) != 5 {\n\t\tt.Fatal(Add(2, 3))\n\t}\n}\n",
+		"calc/calc_test.go": existing,
 	})
 }
+
+var goTestCommand = []string{"go", "test", "-count=1", "./..."}
 
 func goTest(name, a, b, want string) string {
 	return "func " + name + "(t *testing.T) {\n\tif got := Add(" + a + ", " + b + "); got != " + want + " {\n\t\tt.Fatalf(\"got %d\", got)\n\t}\n}\n"
@@ -70,33 +82,52 @@ func goFile(tests ...string) TestFile {
 	return TestFile{Path: "calc/sum_test.go", Content: "package calc\n\nimport \"testing\"\n\n" + strings.Join(tests, "\n")}
 }
 
-func TestReturnedTestsOnly(t *testing.T) {
+func TestReturnedTestsGetCreditOnlyForTheDifferenceTheyMake(t *testing.T) {
 	dir := t.TempDir()
 	correct := overlay(t, dir, "correct", map[string]string{"calc/calc.go": addCorrect})
+	zeroIsOne := overlay(t, dir, "zero-is-one", map[string]string{"calc/calc.go": addZeroIsOne})
 	offByOne := overlay(t, dir, "off-by-one", map[string]string{"calc/calc.go": addOffByOne})
-	alwaysOne := overlay(t, dir, "always-one", map[string]string{"calc/calc.go": addAlwaysOne})
 	stillWrong := overlay(t, dir, "still-wrong", map[string]string{"calc/calc.go": addWrong})
+	// An existing test that passes on the wrong implementation, for heads
+	// that hold the bug.
+	existingZeroes := "package calc\n\nimport \"testing\"\n\nfunc TestAddsZeroes(t *testing.T) {\n\tif Add(0, 0) != 0 {\n\t\tt.Fatal()\n\t}\n}\n"
 
 	cases := []struct {
-		name   string
-		impl   string
-		files  []TestFile
-		failed int
-		expect TestsExpect
-		fails  []string
+		name           string
+		impl, existing string
+		files          []TestFile
+		failed         int
+		expect         TestsExpect
+		fails          []string
 	}{
 		{
-			name:   "tests that pass on head and catch a mutant",
+			name:   "tests that pass on head and catch a mutant the existing tests miss",
 			impl:   addCorrect,
 			files:  []TestFile{goFile(goTest("TestAddingZeroes", "0", "0", "0"))},
-			expect: TestsExpect{Fixed: []string{correct}, Mutants: []Mutant{{Name: "always-one", Overlay: alwaysOne}}},
+			expect: TestsExpect{Fixed: []string{correct}, Mutants: []Mutant{{Name: "zero-is-one", Overlay: zeroIsOne}}},
 		},
 		{
-			name:   "a mutant only an existing test catches",
+			name:   "a mutant the existing tests already catch",
 			impl:   addCorrect,
 			files:  []TestFile{goFile(goTest("TestAddingZeroes", "0", "0", "0"))},
 			expect: TestsExpect{Mutants: []Mutant{{Name: "off-by-one", Overlay: offByOne}}},
-			fails:  []string{"catch mutant off-by-one"},
+			fails:  []string{"existing tests miss mutant off-by-one"},
+		},
+		{
+			// Calling, importing, or inheriting an existing test can't earn
+			// credit: the mutant fails the existing tests on their own.
+			name:   "a returned test that calls an existing one",
+			impl:   addCorrect,
+			files:  []TestFile{goFile("func TestAddingZeroesAndMore(t *testing.T) {\n\tTestAddsTwoNumbers(t)\n}\n")},
+			expect: TestsExpect{Mutants: []Mutant{{Name: "off-by-one", Overlay: offByOne}}},
+			fails:  []string{"existing tests miss mutant off-by-one"},
+		},
+		{
+			name:   "tests that miss a mutant",
+			impl:   addCorrect,
+			files:  []TestFile{goFile(goTest("TestAddingOnes", "1", "1", "2"))},
+			expect: TestsExpect{Mutants: []Mutant{{Name: "zero-is-one", Overlay: zeroIsOne}}},
+			fails:  []string{"catch mutant zero-is-one"},
 		},
 		{
 			name:  "a report that claims passing tests that fail",
@@ -105,50 +136,52 @@ func TestReturnedTestsOnly(t *testing.T) {
 			fails: []string{"if and only if a criterion FAILED"},
 		},
 		{
-			name:   "failing tests that pass with the correct implementation",
-			impl:   addWrong,
-			files:  []TestFile{goFile(goTest("TestAddingTwoAndThree", "2", "3", "5"))},
-			failed: 1,
-			expect: TestsExpect{Fixed: []string{correct}},
+			name:     "failing tests that pass with the correct implementation",
+			impl:     addWrong,
+			existing: existingZeroes,
+			files:    []TestFile{goFile(goTest("TestAddingTwoAndThree", "2", "3", "5"))},
+			failed:   1,
+			expect:   TestsExpect{Fixed: []string{correct}},
 		},
 		{
-			name:   "failing tests that still fail with a supposedly correct implementation",
-			impl:   addWrong,
-			files:  []TestFile{goFile(goTest("TestAddingTwoAndThree", "2", "3", "5"))},
-			failed: 1,
-			expect: TestsExpect{Fixed: []string{stillWrong}},
-			fails:  []string{"pass with still-wrong"},
+			name:     "failing tests that still fail with a supposedly correct implementation",
+			impl:     addWrong,
+			existing: existingZeroes,
+			files:    []TestFile{goFile(goTest("TestAddingTwoAndThree", "2", "3", "5"))},
+			failed:   1,
+			expect:   TestsExpect{Fixed: []string{stillWrong}},
+			fails:    []string{"pass with still-wrong"},
 		},
 		{
-			name:   "broken test code",
+			name:   "broken test code reported as a failure",
 			impl:   addCorrect,
 			files:  []TestFile{goFile("func TestBroken(t *testing.T) {\n\tif Add(1, 1) != {\n}\n")},
 			failed: 1,
-			fails:  []string{"isn't broken"},
+			expect: TestsExpect{Fixed: []string{correct}},
+			fails:  []string{"pass with correct"},
 		},
 		{
-			name:  "a file with no tests in it",
-			impl:  addCorrect,
-			files: []TestFile{goFile("func helper() int { return Add(1, 1) }\n")},
-			fails: []string{"run on head"},
+			name:     "a head whose existing tests already fail",
+			impl:     addWrong,
+			existing: existingAddTest,
+			files:    []TestFile{goFile(goTest("TestAddingZeroes", "0", "0", "0"))},
+			fails:    []string{"passes on head without the returned tests"},
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			ws := goRepo(t, c.impl)
-			r := TestsReport{Failed: c.failed, Files: c.files}
-			got := failing(checkReturnedTests(ws, dir, r, c.expect))
+			existing := c.existing
+			if existing == "" {
+				existing = existingAddTest
+			}
+			ws := goRepoWith(t, c.impl, existing)
+			c.expect.Command = goTestCommand
+			got := failing(checkReturnedTests(ws, dir, TestsReport{Failed: c.failed, Files: c.files}, c.expect))
 			if len(c.fails) == 0 && len(got) > 0 {
 				t.Fatalf("unexpected failures: %v", got)
 			}
 			for _, want := range c.fails {
-				found := false
-				for _, g := range got {
-					if strings.Contains(g, want) {
-						found = true
-					}
-				}
-				if !found {
+				if !strings.Contains(strings.Join(got, "\n"), want) {
 					t.Errorf("no failing check containing %q; failures: %v", want, got)
 				}
 			}
@@ -158,34 +191,45 @@ func TestReturnedTestsOnly(t *testing.T) {
 
 func TestReturnedPythonAndShellTests(t *testing.T) {
 	ws := codeRepo(t, map[string]string{
-		"catalog/__init__.py": "",
-		"catalog/tags.py":     "def tag(name):\n    return name.upper()\n",
-		"tests/__init__.py":   "",
-		"bin/greet.sh":        "#!/bin/sh\necho \"hello $1\"\n",
+		"catalog/__init__.py":    "",
+		"catalog/tags.py":        "def tag(name):\n    return name.upper()\n",
+		"tests/__init__.py":      "",
+		"tests/test_existing.py": "import unittest\n\nfrom catalog.tags import tag\n\n\nclass TagTest(unittest.TestCase):\n    def test_upper(self):\n        self.assertEqual(tag(\"a\"), \"A\")\n",
+		"bin/greet.sh":           "#!/bin/sh\necho \"hello $1\"\n",
 	})
-	py := TestFile{Path: "tests/test_tag_case.py", Content: "import unittest\n\nfrom catalog.tags import tag\n\n\nclass TagTest(unittest.TestCase):\n    def test_tags_are_upper_case(self):\n        self.assertEqual(tag(\"new\"), \"NEW\")\n"}
-	sh := TestFile{Path: "tests/greet_test.sh", Content: "#!/usr/bin/env bash\nset -euo pipefail\nfailures=0\ntest_greets_by_name() {\n\t[ \"$(sh bin/greet.sh Ann)\" = \"hello Ann\" ] || failures=$((failures + 1))\n}\ntest_greets_by_name\n[ \"$failures\" -eq 0 ]\n"}
-	if got := failing(checkReturnedTests(ws, t.TempDir(), TestsReport{Files: []TestFile{py, sh}}, TestsExpect{})); len(got) > 0 {
-		t.Fatalf("passing Python and shell tests: %v", got)
+	dir := t.TempDir()
+	emptyName := overlay(t, dir, "empty-name", map[string]string{"catalog/tags.py": "def tag(name):\n    return name.upper() or \"?\"\n"})
+	pyCommand := []string{"python3", "-m", "unittest", "discover", "-s", "tests"}
+	shCommand := []string{"sh", "-c", `for f in "$@"; do bash "$f" || exit 1; done`, "_", FilesArg}
+
+	py := TestFile{Path: "tests/test_empty_tag.py", Content: "import unittest\n\nfrom catalog.tags import tag\n\n\nclass EmptyTagTest(unittest.TestCase):\n    def test_empty_name_stays_empty(self):\n        self.assertEqual(tag(\"\"), \"\")\n"}
+	got := failing(checkReturnedTests(ws, dir, TestsReport{Files: []TestFile{py}}, TestsExpect{Command: pyCommand, Mutants: []Mutant{{Name: "empty name", Overlay: emptyName}}}))
+	if len(got) > 0 {
+		t.Fatalf("Python tests that catch a mutant: %v", got)
+	}
+	// Inheriting the existing class runs its tests too, but they pass on the
+	// mutant, so they add nothing and the returned test gets no credit.
+	inherits := TestFile{Path: py.Path, Content: "from tests.test_existing import TagTest\n\n\nclass MoreTagTest(TagTest):\n    pass\n"}
+	got = failing(checkReturnedTests(ws, dir, TestsReport{Files: []TestFile{inherits}}, TestsExpect{Command: pyCommand, Mutants: []Mutant{{Name: "empty name", Overlay: emptyName}}}))
+	if !strings.Contains(strings.Join(got, "\n"), "catch mutant empty name") {
+		t.Fatalf("a Python class that only inherits existing tests got credit: %v", got)
 	}
 
-	shFails := TestFile{Path: sh.Path, Content: strings.Replace(sh.Content, "hello Ann", "hi Ann", 1)}
-	got := failing(checkReturnedTests(ws, t.TempDir(), TestsReport{Files: []TestFile{shFails}}, TestsExpect{}))
+	sh := TestFile{Path: "tests/greet_test.sh", Content: "set -euo pipefail\n[ \"$(sh bin/greet.sh Ann)\" = \"hi Ann\" ]\n"}
+	got = failing(checkReturnedTests(ws, dir, TestsReport{Files: []TestFile{sh}}, TestsExpect{Command: shCommand}))
 	if len(got) != 1 || !strings.Contains(got[0], "if and only if a criterion FAILED") {
-		t.Fatalf("failing shell test reported as passing: %v", got)
-	}
-
-	pyBroken := TestFile{Path: py.Path, Content: "import unittest\nfrom catalog.nope import tag\n"}
-	got = failing(checkReturnedTests(ws, t.TempDir(), TestsReport{Failed: 1, Files: []TestFile{pyBroken}}, TestsExpect{}))
-	if !strings.Contains(strings.Join(got, "\n"), "isn't broken") {
-		t.Fatalf("Python import error not flagged: %v", got)
+		t.Fatalf("a failing shell test reported as passing: %v", got)
 	}
 }
 
 func TestNoReturnedFilesMeansNoRuns(t *testing.T) {
 	ws := goRepo(t, addCorrect)
-	if checks := checkReturnedTests(ws, t.TempDir(), TestsReport{}, TestsExpect{}); len(checks) != 0 {
+	if checks := checkReturnedTests(ws, t.TempDir(), TestsReport{}, TestsExpect{Command: goTestCommand}); len(checks) != 0 {
 		t.Fatalf("checks without files: %+v", checks)
+	}
+	got := failing(checkReturnedTests(ws, t.TempDir(), TestsReport{Files: []TestFile{goFile(goTest("TestA", "0", "0", "0"))}}, TestsExpect{}))
+	if len(got) != 1 || !strings.Contains(got[0], "scenario has a test command") {
+		t.Fatalf("files but no command: %v", got)
 	}
 }
 
@@ -200,63 +244,15 @@ func TestReturnedFilesAreNeverWrittenThroughALink(t *testing.T) {
 		t.Fatal(err)
 	}
 	ws.Head = head
-	f := TestFile{Path: "tests/escaped_test.sh", Content: "test_ok() { :; }\ntest_ok\n"}
+	f := TestFile{Path: "tests/escaped_test.sh", Content: "true\n"}
 
 	if files := runnableFiles(ws, []TestFile{f}); len(files) != 0 {
 		t.Fatalf("a path through a link counts as runnable: %v", files)
 	}
-	if run := runReturnedTests(ws, []TestFile{f}, nil, ""); run.Err == nil {
+	if _, _, err := runTests(ws.Work, ws.Head, nil, []TestFile{f}, []string{"true"}); err == nil {
 		t.Fatal("writing through a link succeeded")
 	}
 	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
 		t.Fatalf("wrote %d files outside the checkout", len(entries))
-	}
-}
-
-func TestShellTestsCountOnlyWhenCalled(t *testing.T) {
-	ws := codeRepo(t, map[string]string{"readme.txt": "x\n"})
-	defined := TestFile{Path: "tests/defined_test.sh", Content: "set -euo pipefail\ntest_checks_output() { return 1; }\n"}
-	got := failing(checkReturnedTests(ws, t.TempDir(), TestsReport{Passed: 1, Files: []TestFile{defined}}, TestsExpect{}))
-	if !strings.Contains(strings.Join(got, "\n"), "run on head") {
-		t.Fatalf("a test function that's never called counted as run: %v", got)
-	}
-	called := TestFile{Path: defined.Path, Content: "set -euo pipefail\ntest_checks_output() { :; }\ntest_checks_output\n"}
-	if got := failing(checkReturnedTests(ws, t.TempDir(), TestsReport{Passed: 1, Files: []TestFile{called}}, TestsExpect{})); len(got) > 0 {
-		t.Fatalf("a called test function: %v", got)
-	}
-}
-
-// A test declared inside a string isn't a returned test, so an existing
-// test with that name never runs and can't take the credit for a mutant.
-func TestTestNamesInStringsDontSelectExistingTests(t *testing.T) {
-	dir := t.TempDir()
-	offByOne := overlay(t, dir, "off-by-one", map[string]string{"calc/calc.go": addOffByOne})
-	ws := goRepo(t, addCorrect)
-	f := goFile(goTest("TestAddingZeroes", "0", "0", "0"), "const named = `\nfunc TestAddsTwoNumbers(t *testing.T) {}\n`\n")
-	if names := TestNames(f); strings.Join(names, ",") != "TestAddingZeroes" {
-		t.Fatalf("TestNames = %v", names)
-	}
-	got := strings.Join(failing(checkReturnedTests(ws, dir, TestsReport{Files: []TestFile{f}}, TestsExpect{Mutants: []Mutant{{Name: "off-by-one", Overlay: offByOne}}})), "\n")
-	if !strings.Contains(got, "catch mutant off-by-one") {
-		t.Fatalf("an existing test caught the mutant for the returned ones; failures:\n%s", got)
-	}
-}
-
-// An existing test class that a returned module imports, for example to
-// reuse a helper, must not run and catch a mutant for the returned tests.
-func TestImportedPythonTestClassesDontRun(t *testing.T) {
-	dir := t.TempDir()
-	add := "def add(a, b):\n    return a + b\n"
-	offByOne := overlay(t, dir, "off-by-one", map[string]string{"calc/add.py": "def add(a, b):\n    return a + b + (1 if a > 0 else 0)\n"})
-	ws := codeRepo(t, map[string]string{
-		"calc/__init__.py":       "",
-		"calc/add.py":            add,
-		"tests/__init__.py":      "",
-		"tests/test_existing.py": "import unittest\n\nfrom calc.add import add\n\n\nclass AdditionTest(unittest.TestCase):\n    values = (0, 0)\n\n    def test_adds_two_numbers(self):\n        self.assertEqual(add(2, 3), 5)\n",
-	})
-	returned := TestFile{Path: "tests/test_zero.py", Content: "import unittest\n\nfrom calc.add import add\nfrom tests.test_existing import AdditionTest\n\n\nclass ZeroTest(unittest.TestCase):\n    def test_adds_zeroes(self):\n        self.assertEqual(add(*AdditionTest.values), 0)\n"}
-	got := strings.Join(failing(checkReturnedTests(ws, dir, TestsReport{Files: []TestFile{returned}}, TestsExpect{Mutants: []Mutant{{Name: "off-by-one", Overlay: offByOne}}})), "\n")
-	if !strings.Contains(got, "catch mutant off-by-one") {
-		t.Fatalf("an imported existing test class caught the mutant for the returned tests; failures:\n%s", got)
 	}
 }

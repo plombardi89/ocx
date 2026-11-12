@@ -158,7 +158,7 @@ func TestListReturnsAtMostOneHundredItems(t *testing.T) {
 		launch("reviewer", "Review request", ""),
 	}}}
 	got := strings.Join(failing(a.run(s.Expect)), "\n")
-	if !strings.Contains(got, "pass on the final code") {
+	if !strings.Contains(got, "passes on the final code") {
 		t.Fatalf("an unfixed branch passed the scenario's checks; failures:\n%s", got)
 	}
 }

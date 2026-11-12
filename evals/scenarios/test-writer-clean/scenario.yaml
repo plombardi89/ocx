@@ -1,5 +1,5 @@
 name: test-writer-clean
-description: The correct pagination change. Every criterion passes, with no invented failures or gaps, and the tests catch five mutants of the code.
+description: The correct pagination change. Every criterion passes, with no invented failures or gaps, and the tests catch five mutants of the code that the existing tests miss.
 fixture: go-service
 tags: [tests]
 agent: test-writer
@@ -21,6 +21,7 @@ expect:
   unchanged: true
   tests:
     plan: docs/plans/0001-product-pagination.md
+    command: [go, test, -count=1, ./...]
     status: COMPLETE
     passed: 7
     failed: 0
@@ -29,8 +30,8 @@ expect:
       - {name: no limit cap, overlay: ../_shared/pagination-mutants/no-cap}
       - {name: a panic past the end, overlay: ../_shared/pagination-mutants/past-end-panic}
       - {name: a default limit of 10, overlay: ../_shared/pagination-mutants/default-limit-10}
-      - {name: items not sorted by ID, overlay: ../_shared/pagination-mutants/sorted-by-id-descending}
-      - {name: total counting only the page, overlay: ../_shared/pagination-mutants/total-counts-the-page}
+      - {name: items sorted by name instead of ID, overlay: ../_shared/pagination-mutants/sorted-by-name}
+      - {name: total capped at 100, overlay: ../_shared/pagination-mutants/total-capped-at-100}
     name_forbid:
       - "(?i)\\b(plan|criteri(on|a)|acceptance|reviews?|reviewer|test-writer)\\b"
       - "\\bAC ?\\d"
