@@ -241,3 +241,22 @@ func TestTestNamesInStringsDontSelectExistingTests(t *testing.T) {
 		t.Fatalf("an existing test caught the mutant for the returned ones; failures:\n%s", got)
 	}
 }
+
+// An existing test class that a returned module imports, for example to
+// reuse a helper, must not run and catch a mutant for the returned tests.
+func TestImportedPythonTestClassesDontRun(t *testing.T) {
+	dir := t.TempDir()
+	add := "def add(a, b):\n    return a + b\n"
+	offByOne := overlay(t, dir, "off-by-one", map[string]string{"calc/add.py": "def add(a, b):\n    return a + b + (1 if a > 0 else 0)\n"})
+	ws := codeRepo(t, map[string]string{
+		"calc/__init__.py":       "",
+		"calc/add.py":            add,
+		"tests/__init__.py":      "",
+		"tests/test_existing.py": "import unittest\n\nfrom calc.add import add\n\n\nclass AdditionTest(unittest.TestCase):\n    values = (0, 0)\n\n    def test_adds_two_numbers(self):\n        self.assertEqual(add(2, 3), 5)\n",
+	})
+	returned := TestFile{Path: "tests/test_zero.py", Content: "import unittest\n\nfrom calc.add import add\nfrom tests.test_existing import AdditionTest\n\n\nclass ZeroTest(unittest.TestCase):\n    def test_adds_zeroes(self):\n        self.assertEqual(add(*AdditionTest.values), 0)\n"}
+	got := strings.Join(failing(checkReturnedTests(ws, dir, TestsReport{Files: []TestFile{returned}}, TestsExpect{Mutants: []Mutant{{Name: "off-by-one", Overlay: offByOne}}})), "\n")
+	if !strings.Contains(got, "catch mutant off-by-one") {
+		t.Fatalf("an imported existing test class caught the mutant for the returned tests; failures:\n%s", got)
+	}
+}

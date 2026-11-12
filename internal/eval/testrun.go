@@ -227,14 +227,28 @@ func runGo(repo string, files []TestFile) testRun {
 	return r
 }
 
-// runPython runs the returned test modules with unittest from the
+// pyRunner runs only the test classes each named module defines itself. A
+// test class a module imports, such as an existing one it reuses a helper
+// from, belongs to its own module and doesn't run.
+const pyRunner = `import importlib, sys, unittest
+suite = unittest.TestSuite()
+for name in sys.argv[1:]:
+    module = importlib.import_module(name)
+    for obj in vars(module).values():
+        if isinstance(obj, type) and issubclass(obj, unittest.TestCase) and obj.__module__ == name:
+            suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(obj))
+result = unittest.TextTestRunner(verbosity=2).run(suite)
+sys.exit(0 if result.wasSuccessful() else 1)
+`
+
+// runPython runs the test classes the returned modules define, from the
 // repository root.
 func runPython(repo string, files []TestFile) testRun {
 	var modules []string
 	for _, f := range files {
 		modules = append(modules, strings.ReplaceAll(strings.TrimSuffix(f.Path, ".py"), "/", "."))
 	}
-	out, failed, err := runCommand(repo, "python3", append([]string{"-m", "unittest", "-v"}, modules...)...)
+	out, failed, err := runCommand(repo, "python3", append([]string{"-c", pyRunner}, modules...)...)
 	if err != nil {
 		return testRun{Err: err, Output: out}
 	}
