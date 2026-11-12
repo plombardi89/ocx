@@ -217,7 +217,7 @@ Write "None" under any empty section ("Earlier findings" is "None" in round 1). 
 
 Record every verdict, approving or not, on Head before returning the report. The first line of the note is machine-checked by the pre-push hook.
 
-1. Write the note to `/tmp/opencode/reviews/<repo>-<first 7 of head>-note.md` with your edit tool:
+1. Write the note to `/tmp/opencode/reviews/<repo-dir-name>-<head 7>-<4 random lowercase letters>-note.md` with your edit tool, named like a scratch worktree so parallel reviews never share a file:
 
    ```text
    ocreview: verdict=<APPROVE|REQUEST_CHANGES> spec=<PASS|FAIL|NA> quality=<PASS|FAIL> base=<full base sha> head=<full head sha>
@@ -228,7 +228,7 @@ Record every verdict, approving or not, on Head before returning the report. The
 2. Record it from that file. Don't pass the report inline: policies match the text of a command, so a report that mentions a protected path, such as `.git/hooks`, would get the whole command blocked.
 
    ```sh
-   git notes --ref=ocreview add -f -F /tmp/opencode/reviews/<repo>-<first 7 of head>-note.md <full head sha>
+   git notes --ref=ocreview add -f -F <note file> <full head sha>
    ```
 
 3. Confirm it with `git notes --ref=ocreview show <full head sha>`.
