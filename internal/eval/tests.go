@@ -2,6 +2,9 @@ package eval
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -157,11 +160,23 @@ var (
 	shTestName = regexp.MustCompile(`(?m)^\s*(?:function\s+)?(test_\w+)\s*\(\)`)
 )
 
-// TestNames returns the test function names in a returned test file.
+// TestNames returns the test function names in a returned test file. Go
+// files are parsed, so a test declaration inside a string or a comment
+// isn't a test; a Go file that doesn't parse falls back to matching lines,
+// so running it still shows the build failure.
 func TestNames(f TestFile) []string {
 	var re *regexp.Regexp
 	switch {
 	case strings.HasSuffix(f.Path, ".go"):
+		if file, err := parser.ParseFile(token.NewFileSet(), f.Path, f.Content, 0); err == nil {
+			var names []string
+			for _, d := range file.Decls {
+				if fn, ok := d.(*ast.FuncDecl); ok && fn.Recv == nil && strings.HasPrefix(fn.Name.Name, "Test") && fn.Name.Name != "TestMain" {
+					names = append(names, fn.Name.Name)
+				}
+			}
+			return names
+		}
 		re = goTestName
 	case strings.HasSuffix(f.Path, ".py"):
 		re = pyTestName
@@ -179,100 +194,25 @@ func TestNames(f TestFile) []string {
 	return names
 }
 
-// testProse returns a file's test names and comments: the text that must
-// describe behavior rather than where the test came from.
+// testProse returns the text in a test file that must describe behavior
+// rather than where the test came from: its test names, and in Go, whose
+// parser finds them exactly, its comments. Comments in other languages are
+// left to the reviewer, which checks every change against the writing rules.
 func testProse(f TestFile) []string {
 	prose := TestNames(f)
-	switch {
-	case strings.HasSuffix(f.Path, ".go"):
-		prose = append(prose, goComments(f.Content)...)
-	case strings.HasSuffix(f.Path, ".py"):
-		prose = append(prose, hashComments(f.Content, false)...)
-	default:
-		prose = append(prose, hashComments(f.Content, true)...)
+	if !strings.HasSuffix(f.Path, ".go") {
+		return prose
+	}
+	file, err := parser.ParseFile(token.NewFileSet(), f.Path, f.Content, parser.ParseComments)
+	if err != nil {
+		return prose
+	}
+	for _, g := range file.Comments {
+		for _, c := range g.List {
+			prose = append(prose, c.Text)
+		}
 	}
 	return prose
-}
-
-// goComments returns the comments in Go source. Quotes inside a comment,
-// such as an apostrophe, don't start a string, and comment markers inside
-// a string, rune, or raw string don't start a comment.
-func goComments(src string) []string {
-	var out []string
-	for i := 0; i < len(src); i++ {
-		switch {
-		case strings.HasPrefix(src[i:], "//"):
-			end := strings.IndexByte(src[i:], '\n')
-			if end < 0 {
-				end = len(src) - i
-			}
-			out = append(out, src[i:i+end])
-			i += end
-		case strings.HasPrefix(src[i:], "/*"):
-			end := strings.Index(src[i+2:], "*/")
-			if end < 0 {
-				return append(out, src[i:])
-			}
-			out = append(out, src[i:i+2+end+2])
-			i += 2 + end + 1
-		case src[i] == '"' || src[i] == '\'':
-			i = skipQuoted(src, i, src[i], true, false)
-		case src[i] == '`':
-			i = skipQuoted(src, i, '`', false, true)
-		}
-	}
-	return out
-}
-
-// hashComments returns the "#" comments in Python or shell source, without
-// a leading shebang line. In shell, "#" starts a comment only at the start
-// of a word, so "$#" isn't one.
-func hashComments(src string, shell bool) []string {
-	var out []string
-	for i := 0; i < len(src); i++ {
-		switch c := src[i]; {
-		case c == '#':
-			if shell && i > 0 && !strings.ContainsRune(" \t\n;&|()", rune(src[i-1])) {
-				continue
-			}
-			end := strings.IndexByte(src[i:], '\n')
-			if end < 0 {
-				end = len(src) - i
-			}
-			if !(i == 0 && strings.HasPrefix(src, "#!")) {
-				out = append(out, src[i:i+end])
-			}
-			i += end
-		case !shell && (strings.HasPrefix(src[i:], `"""`) || strings.HasPrefix(src[i:], "'''")):
-			end := strings.Index(src[i+3:], src[i:i+3])
-			if end < 0 {
-				return out
-			}
-			i += 3 + end + 2
-		case c == '"' || c == '\'':
-			// Shell single quotes have no escapes, and shell strings may
-			// span lines.
-			i = skipQuoted(src, i, c, !(shell && c == '\''), shell)
-		}
-	}
-	return out
-}
-
-// skipQuoted returns the index of the quote that closes the string opened at
-// src[start]. A string that may not span lines ends at the end of its line
-// if it never closes.
-func skipQuoted(src string, start int, quote byte, escapes, multiline bool) int {
-	for j := start + 1; j < len(src); j++ {
-		switch {
-		case escapes && src[j] == '\\':
-			j++
-		case src[j] == quote:
-			return j
-		case src[j] == '\n' && !multiline:
-			return j
-		}
-	}
-	return len(src)
 }
 
 // checkTestsReport checks a test-writer report against the plan and the

@@ -225,6 +225,9 @@ func TestTestsReportChecks(t *testing.T) {
 		{name: "an apostrophe in a comment that names the source", report: func(r *report) {
 			r.files = []TestFile{{Path: "internal/a/x_test.go", Content: "package a\n\nimport \"testing\"\n\n// This test's cap comes from the plan's value.\nfunc TestCap(t *testing.T) {}\n"}}
 		}, expect: TestsExpect{NameForbid: []string{`(?i)\bplan\b`}}, fails: []string{"describe behavior"}},
+		{name: "a shell heredoc that mentions the plan", report: func(r *report) {
+			r.files = []TestFile{{Path: "tests/heredoc_test.sh", Content: "test_reads_input() {\n\tcat <<EOF\n# plan\nEOF\n}\ntest_reads_input\n"}}
+		}, expect: TestsExpect{NameForbid: []string{`(?i)\bplan\b`}}},
 		{name: "a test-writer literal the behavior needs", report: func(*report) {},
 			expect: TestsExpect{NameForbid: []string{`(?i)test-writer`}}},
 		{name: "exact results", report: func(*report) {},
@@ -368,20 +371,22 @@ func TestUnchangedSeesEditsToFilesGitQuotes(t *testing.T) {
 	}
 }
 
-func TestCommentsAreFoundOutsideStrings(t *testing.T) {
+func TestProseIsTestNamesAndGoComments(t *testing.T) {
+	goSrc := "package a\n\nimport \"testing\"\n\n" +
+		"const quoted = `func TestAddsTwoNumbers(t *testing.T) {} // not a comment`\n\n" +
+		"// it's a comment\nfunc TestReal(t *testing.T) { _ = quoted /* the plan's */ }\n"
 	cases := []struct {
 		path, src string
 		want      []string
 	}{
-		{"a_test.go", "x := \"// not a comment\" // it's a comment\n", []string{"// it's a comment"}},
-		{"a_test.go", "x := `/* raw\n*/` /* the plan's */ y := '\"'\n// last", []string{"/* the plan's */", "// last"}},
-		{"test_a.py", "s = \"# not one\"  # it's one\nd = \"\"\"\n# docstring\n\"\"\"\n", []string{"# it's one"}},
-		{"a_test.sh", "#!/usr/bin/env bash\necho \"$#\" '# no' # the plan's\nx=\"a\n# still a string\"\n", []string{"# the plan's"}},
+		{"a/a_test.go", goSrc, []string{"TestReal", "// it's a comment", "/* the plan's */"}},
+		{"tests/test_a.py", "# the plan's\nimport unittest\n\nclass T(unittest.TestCase):\n    def test_tags(self):\n        pass\n", []string{"test_tags"}},
+		{"tests/a_test.sh", "text=$'it\\'s' # the plan's\ncat <<EOF\n# plan\nEOF\ntest_text() { :; }\ntest_text\n", []string{"test_text"}},
 	}
 	for _, c := range cases {
 		got := testProse(TestFile{Path: c.path, Content: c.src})
 		if strings.Join(got, "|") != strings.Join(c.want, "|") {
-			t.Errorf("%s: comments = %q, want %q", c.path, got, c.want)
+			t.Errorf("%s: prose = %q, want %q", c.path, got, c.want)
 		}
 	}
 }

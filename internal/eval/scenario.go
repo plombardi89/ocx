@@ -124,8 +124,8 @@ type TestsExpect struct {
 	MinFailed int `yaml:"min_failed"`
 	// Results maps criterion numbers to the result each must have.
 	Results map[int]string `yaml:"results"`
-	// NameForbid are regular expressions that no test name or comment in
-	// the returned files may match.
+	// NameForbid are regular expressions that no test name, or comment in a
+	// Go file, in the returned files may match.
 	NameForbid []string `yaml:"name_forbid"`
 
 	// When the report has test files, the eval runs them, and only them, on
@@ -194,8 +194,8 @@ type E2E struct {
 	// final-state checks above look at the pushed branches, or, when
 	// nothing was pushed, at the branch build left checked out.
 	ApprovedIfPushed bool `yaml:"approved_if_pushed"`
-	// TestProseForbid are regular expressions that no test name or comment
-	// in the test files the pushed branches change may match.
+	// TestProseForbid are regular expressions that no test name, or comment
+	// in a Go file, in the test files the pushed branches change may match.
 	TestProseForbid []string `yaml:"test_prose_forbid"`
 	// PushedFileMentions requires each file, as pushed, to match a pattern.
 	PushedFileMentions []FileMention `yaml:"pushed_file_mentions"`

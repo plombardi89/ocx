@@ -225,3 +225,19 @@ func TestShellTestsCountOnlyWhenCalled(t *testing.T) {
 		t.Fatalf("a called test function: %v", got)
 	}
 }
+
+// A test declared inside a string isn't a returned test, so an existing
+// test with that name never runs and can't take the credit for a mutant.
+func TestTestNamesInStringsDontSelectExistingTests(t *testing.T) {
+	dir := t.TempDir()
+	offByOne := overlay(t, dir, "off-by-one", map[string]string{"calc/calc.go": addOffByOne})
+	ws := goRepo(t, addCorrect)
+	f := goFile(goTest("TestAddingZeroes", "0", "0", "0"), "const named = `\nfunc TestAddsTwoNumbers(t *testing.T) {}\n`\n")
+	if names := TestNames(f); strings.Join(names, ",") != "TestAddingZeroes" {
+		t.Fatalf("TestNames = %v", names)
+	}
+	got := strings.Join(failing(checkReturnedTests(ws, dir, TestsReport{Files: []TestFile{f}}, TestsExpect{Mutants: []Mutant{{Name: "off-by-one", Overlay: offByOne}}})), "\n")
+	if !strings.Contains(got, "catch mutant off-by-one") {
+		t.Fatalf("an existing test caught the mutant for the returned ones; failures:\n%s", got)
+	}
+}
