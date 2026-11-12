@@ -105,6 +105,7 @@ func editTargets(input map[string]any) []string {
 
 type asserter struct {
 	agent  string
+	dir    string // the scenario directory
 	ws     *Workspace
 	tr     *Transcript
 	final  string
@@ -213,10 +214,14 @@ func (a *asserter) run(e Expect) []Check {
 	}
 
 	if e.Tests != nil {
-		if r, ok := ParseTestsReport(a.final); ok {
+		r, ok := ParseTestsReport(a.final)
+		if ok {
 			a.summary, a.verdict = r.Line, r.Status
 		}
 		checks = append(checks, checkTestsReport(a.ws, a.final, *e.Tests)...)
+		if ok {
+			checks = append(checks, checkReturnedTests(a.ws, a.dir, r, *e.Tests)...)
+		}
 	}
 
 	if e.E2E != nil {

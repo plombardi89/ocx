@@ -234,7 +234,7 @@ func runOne(opts Options, cfg *config.Config, j job) Result {
 		r.Checks = append(r.Checks, checkModel(exp, s.Agent, model))
 	}
 
-	a := asserter{agent: s.Agent, ws: ws, tr: tr, final: final, cfg: cfg, outDir: r.OutDir, ctx: exportCtx}
+	a := asserter{agent: s.Agent, dir: s.Dir, ws: ws, tr: tr, final: final, cfg: cfg, outDir: r.OutDir, ctx: exportCtx}
 	r.Checks = append(r.Checks, a.run(s.Expect)...)
 	r.Verdict, r.Summary = a.verdict, a.summary
 

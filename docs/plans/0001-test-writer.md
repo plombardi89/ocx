@@ -166,7 +166,7 @@ None. Phil answered these on 2026-11-11:
 
 1. [x] Report checks (criterion 14).
    - Done when: unit tests cover each check with a passing and a failing report, including missing files, files in an all-GAP report, a valid all-GAP report with none, an INCOMPLETE report for a missing plan, counts that don't add up, a provenance test name, an allowed `"test-writer"` literal, a leaked worktree, a changed source file, an uncommitted change that was already there, repeated file paths (identical, different, and spelled differently), and an INCOMPLETE report with no files offered to a scenario that expects COMPLETE.
-2. [ ] Running a report's tests (criterion 15).
+2. [x] Running a report's tests (criterion 15).
    - Done when: unit tests cover a report whose claimed PASSED tests actually fail, broken test code, returned files with no tests in them, a correct implementation, and a mutant that an existing test catches but the returned tests miss.
 3. [ ] Build-side checks, stubbed agents, and uncommitted changes (criterion 16).
    - Done when: unit tests cover each check, every existing scenario still loads, and `make check` passes.
@@ -211,3 +211,4 @@ None. Phil answered these on 2026-11-11:
    3. Brought the untested retry rule to Phil (Open question 8): added stubbed report sequences, `e2e-test-retry-recovers`, and `e2e-test-retry-stops`.
 5. 2026-11-12: Phil approved the plan.
 6. 2026-11-12: Task 1 done. The test-writer's scratch root doesn't exist until task 4, so the unit test for each agent's own root uses the debugger's.
+7. 2026-11-12: Task 2 done. The eval runs returned tests in a clone of Head, so the work repository's worktrees stay as they were.

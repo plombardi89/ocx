@@ -176,7 +176,9 @@ func TestNames(f TestFile) []string {
 	}
 	var names []string
 	for _, m := range re.FindAllStringSubmatch(f.Content, -1) {
-		names = append(names, m[1])
+		if m[1] != "TestMain" {
+			names = append(names, m[1])
+		}
 	}
 	return names
 }

@@ -119,6 +119,23 @@ type TestsExpect struct {
 	// NameForbid are regular expressions that no test name or comment in
 	// the returned files may match.
 	NameForbid []string `yaml:"name_forbid"`
+
+	// When the report has test files, the eval runs them, and only them, on
+	// Head; they must fail exactly when the report has FAILED criteria.
+	// Broken overrides the language's pattern for output that means the
+	// test code itself is broken. Fixed are overlays, relative to the
+	// scenario directory, with a correct implementation the tests must pass
+	// on. Each mutant's overlay breaks the implementation in a way the tests
+	// must catch.
+	Broken  string   `yaml:"broken"`
+	Fixed   []string `yaml:"fixed"`
+	Mutants []Mutant `yaml:"mutants"`
+}
+
+// Mutant is a deliberately broken implementation.
+type Mutant struct {
+	Name    string `yaml:"name"`
+	Overlay string `yaml:"overlay"`
 }
 
 // E2E holds assertions for end-to-end scenarios where build does the work.
@@ -256,6 +273,21 @@ func (s Scenario) Validate(root string) error {
 	patterns := append([]string{}, s.Expect.Mentions...)
 	if t := s.Expect.Tests; t != nil {
 		patterns = append(patterns, t.NameForbid...)
+		if t.Broken != "" {
+			patterns = append(patterns, t.Broken)
+		}
+		overlays := append([]string{}, t.Fixed...)
+		for i, m := range t.Mutants {
+			if m.Name == "" || m.Overlay == "" {
+				errs = append(errs, fmt.Errorf("%s: mutant %d needs a name and an overlay", prefix, i+1))
+			}
+			overlays = append(overlays, m.Overlay)
+		}
+		for _, o := range overlays {
+			if _, err := os.Stat(filepath.Join(s.Dir, o)); err != nil {
+				errs = append(errs, fmt.Errorf("%s: overlay %q not found", prefix, o))
+			}
+		}
 		switch t.Status {
 		case "", "COMPLETE", "INCOMPLETE":
 		default:
