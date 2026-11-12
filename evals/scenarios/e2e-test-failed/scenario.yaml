@@ -1,5 +1,5 @@
 name: e2e-test-failed
-description: The pagination plan and its planted-bug code are committed. With the /write-tests text, build adopts the test-writer's failing tests exactly, fixes the code, and pushes an approved branch whose adopted tests still catch the original bug.
+description: The pagination plan and its planted-bug code are committed. With the /write-tests text, build adopts the test-writer's failing tests exactly, fixes the code, and reaches review with a branch whose adopted tests still catch the original bug. Pushing isn't required, because the review can turn up problems the plan doesn't cover; anything pushed must be approved.
 fixture: go-service
 tags: [tests, e2e]
 agent: build
@@ -11,9 +11,8 @@ prompt: |
   Get independent tests for the plan docs/plans/0001-product-pagination.md by following the `requesting-tests` skill. First check that every task in the plan is implemented and committed on the current branch, and that the project's tests pass. When every adopted test passes and nothing is waiting for Phil, follow the `requesting-review` skill, and push the branch once it's approved.
 expect:
   e2e:
-    pushed_branch_prefix: feat/
     remote_main_unchanged: true
-    pushed_head_approved: true
+    approved_if_pushed: true
     dispatches:
       - agent: test-writer
         prefix: Test request

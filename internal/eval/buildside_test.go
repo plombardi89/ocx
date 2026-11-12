@@ -57,6 +57,11 @@ func TestDispatchChecks(t *testing.T) {
 // existing test that doesn't catch it, and whose origin has branch
 // feat/add with one commit per entry in commits.
 func pushedRepo(t *testing.T, commits ...map[string]string) *Workspace {
+	return branchRepo(t, true, commits...)
+}
+
+// branchRepo is pushedRepo, with feat/add pushed only if push is set.
+func branchRepo(t *testing.T, push bool, commits ...map[string]string) *Workspace {
 	t.Helper()
 	ws := goRepo(t, addWrong)
 	writeFiles(t, ws.Work, map[string]string{"calc/calc_test.go": "package calc\n\nimport \"testing\"\n\nfunc TestAddsZeroes(t *testing.T) {\n\tif Add(0, 0) != 0 {\n\t\tt.Fatal()\n\t}\n}\n"})
@@ -82,8 +87,10 @@ func pushedRepo(t *testing.T, commits ...map[string]string) *Workspace {
 			t.Fatal(err)
 		}
 	}
-	if _, err := gitx.Run(ws.Work, "push", "-q", "origin", "feat/add"); err != nil {
-		t.Fatal(err)
+	if push {
+		if _, err := gitx.Run(ws.Work, "push", "-q", "origin", "feat/add"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return ws
 }
@@ -122,7 +129,7 @@ func TestBuildSideChecks(t *testing.T) {
 			e: E2E{RegistrationCommit: []string{"calc/calc.go"}}, want: []string{"a commit that changes only"}},
 		{name: "something was pushed", commits: adoptAndFix, e: E2E{NoPush: true}, want: []string{"nothing pushed"}},
 		{name: "a pushed test named for the plan", commits: []map[string]string{{"calc/plan_test.go": "package calc\n\nimport \"testing\"\n\n// Covers criterion 2 of the plan.\nfunc TestAC2(t *testing.T) {}\n"}},
-			e: E2E{TestProseForbid: []string{`(?i)\bcriteri`, `AC\d`}}, want: []string{"pushed test names and comments describe behavior"}},
+			e: E2E{TestProseForbid: []string{`(?i)\bcriteri`, `AC\d`}}, want: []string{"test names and comments describe behavior"}},
 		{name: "a pushed file that mentions what it must", commits: adoptAndFix,
 			e:    E2E{PushedFileMentions: []FileMention{{Path: "calc/calc.go", Pattern: `a \+ b`}, {Path: "calc/calc.go", Pattern: `a - b`}}},
 			want: []string{"mentions a - b"}},
@@ -207,5 +214,27 @@ func TestStubbedAgentAndUncommittedChanges(t *testing.T) {
 	_ = ws.Remove()
 	if _, err := os.Stat(stubDir); !os.IsNotExist(err) {
 		t.Fatalf("stub directory left behind: %v", err)
+	}
+}
+
+func TestChecksUseTheLocalBranchWhenNothingWasPushed(t *testing.T) {
+	dir := t.TempDir()
+	buggy := overlay(t, dir, "buggy", map[string]string{"calc/calc.go": addWrong})
+	test := goFile(goTest("TestAddingTwoAndThree", "2", "3", "5"))
+	e := E2E{AdoptedExactly: true, Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."},
+		RegistrationCommit: []string{"calc/calc.go"}, ApprovedIfPushed: true, NoPush: true}
+
+	ws := branchRepo(t, false, map[string]string{test.Path: test.Content}, map[string]string{"calc/calc.go": addCorrect})
+	a := &asserter{ws: ws, dir: dir, tr: &Transcript{Tools: []Part{launch("test-writer", "Test request", returnedReport(test))}}}
+	if got := failing(a.e2e(e)); len(got) > 0 {
+		t.Fatalf("local branch: %v", got)
+	}
+
+	// The same branch, pushed without an approval.
+	pushed := branchRepo(t, true, map[string]string{test.Path: test.Content}, map[string]string{"calc/calc.go": addCorrect})
+	a = &asserter{ws: pushed, dir: dir, tr: &Transcript{Tools: []Part{launch("test-writer", "Test request", returnedReport(test))}}}
+	got := strings.Join(failing(a.e2e(E2E{ApprovedIfPushed: true})), "\n")
+	if !strings.Contains(got, "anything pushed is approved") {
+		t.Fatalf("unapproved push: %v", got)
 	}
 }

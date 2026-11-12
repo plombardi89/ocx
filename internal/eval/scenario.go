@@ -189,6 +189,11 @@ type E2E struct {
 	RegistrationCommit []string `yaml:"registration_commit"`
 	// NoPush requires that no branch besides main reached origin.
 	NoPush bool `yaml:"no_push"`
+	// ApprovedIfPushed requires every pushed head to carry an approval for
+	// that exact commit, and passes when nothing was pushed. The commit and
+	// final-state checks above look at the pushed branches, or, when
+	// nothing was pushed, at the branch build left checked out.
+	ApprovedIfPushed bool `yaml:"approved_if_pushed"`
 	// TestProseForbid are regular expressions that no test name or comment
 	// in the test files the pushed branches change may match.
 	TestProseForbid []string `yaml:"test_prose_forbid"`

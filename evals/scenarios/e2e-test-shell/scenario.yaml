@@ -1,5 +1,5 @@
 name: e2e-test-shell
-description: The backup-manifest plan and its planted-bug script are committed. With the /write-tests text, build adopts the test-writer's files exactly, registers them in tests/run.sh in a commit of their own, fixes the script, and pushes an approved branch whose make test still catches the original bug.
+description: The backup-manifest plan and its planted-bug script are committed. With the /write-tests text, build adopts the test-writer's files exactly, registers them in tests/run.sh in a commit of their own, fixes the script, and reaches review with a branch whose make test still catches the original bug. Pushing isn't required; anything pushed must be approved.
 fixture: sh-tools
 tags: [tests, e2e, shell]
 agent: build
@@ -11,9 +11,8 @@ prompt: |
   Get independent tests for the plan docs/plans/0001-backup-manifest.md by following the `requesting-tests` skill. First check that every task in the plan is implemented and committed on the current branch, and that the project's tests pass. When every adopted test passes and nothing is waiting for Phil, follow the `requesting-review` skill, and push the branch once it's approved.
 expect:
   e2e:
-    pushed_branch_prefix: feat/
     remote_main_unchanged: true
-    pushed_head_approved: true
+    approved_if_pushed: true
     dispatches:
       - agent: test-writer
         prefix: Test request

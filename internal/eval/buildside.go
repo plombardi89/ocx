@@ -53,17 +53,37 @@ func commitChanges(repo, sha string) []commitChange {
 	return out
 }
 
-// branchCommits lists the commits a pushed branch adds to main, oldest first.
-func (a *asserter) branchCommits(branch string) []string {
-	out := gitOut(a.ws.Origin, "rev-list", "--reverse", a.ws.Base+".."+"refs/heads/"+branch)
+// result is a branch build produced: a pushed branch in origin, or, when
+// nothing was pushed, the branch build left checked out in the work
+// repository.
+type result struct {
+	Name, Repo, Ref string
+}
+
+func (a *asserter) results(pushed []string) []result {
+	var out []result
+	for _, b := range pushed {
+		out = append(out, result{Name: b, Repo: a.ws.Origin, Ref: "refs/heads/" + b})
+	}
+	if len(out) == 0 && a.ws.Work != "" {
+		name := gitOut(a.ws.Work, "branch", "--show-current")
+		out = append(out, result{Name: name + " (not pushed)", Repo: a.ws.Work, Ref: "HEAD"})
+	}
+	return out
+}
+
+// commits lists the commits a result adds to main, oldest first.
+func (a *asserter) commits(r result) []string {
+	out := gitOut(r.Repo, "rev-list", "--reverse", a.ws.Base+".."+r.Ref)
 	if out == "" {
 		return nil
 	}
 	return strings.Split(out, "\n")
 }
 
-// buildSide checks what build did with the test-writer's tests and what it
-// pushed.
+// buildSide checks what build did with the test-writer's tests: in the
+// branches it pushed, or, when it pushed nothing, in the branch it left
+// checked out.
 func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 	var checks []Check
 	add := func(name string, ok bool, detail string, args ...any) {
@@ -79,6 +99,18 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 	if e.NoPush {
 		add("nothing pushed", len(pushed) == 0, "pushed %v", pushed)
 	}
+	if e.ApprovedIfPushed {
+		var unapproved []string
+		for _, b := range pushed {
+			sha := gitOut(a.ws.Origin, "rev-parse", "refs/heads/"+b)
+			m := noteLine.FindStringSubmatch(firstLine(gitOut(a.ws.Work, "notes", "--ref=ocreview", "show", sha)))
+			if m == nil || m[1] != "APPROVE" || m[2] != sha {
+				unapproved = append(unapproved, b)
+			}
+		}
+		add("anything pushed is approved", len(unapproved) == 0, "pushed without a matching approval: %v", unapproved)
+	}
+	results := a.results(pushed)
 
 	var adopted []TestFile
 	if e.AdoptedExactly || len(e.Buggy) > 0 {
@@ -101,17 +133,17 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 		for _, f := range adopted {
 			want[f.Path] = strings.TrimSpace(f.Content)
 		}
-		found, detail := false, "no pushed commit adds exactly the returned files"
-		for _, b := range pushed {
-			for _, sha := range a.branchCommits(b) {
-				changes := commitChanges(a.ws.Origin, sha)
+		found, detail := false, "no commit adds exactly the returned files"
+		for _, r := range results {
+			for _, sha := range a.commits(r) {
+				changes := commitChanges(r.Repo, sha)
 				if len(changes) != len(want) {
 					continue
 				}
 				same := true
 				for _, c := range changes {
 					content, ok := want[c.Path]
-					if c.Status != "A" || !ok || gitOut(a.ws.Origin, "show", sha+":"+c.Path) != content {
+					if c.Status != "A" || !ok || gitOut(r.Repo, "show", sha+":"+c.Path) != content {
 						same = false
 						break
 					}
@@ -129,12 +161,13 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 		for i, o := range e.Buggy {
 			overlays[i] = resolve(o)
 		}
-		for _, b := range pushed {
-			sha := gitOut(a.ws.Origin, "rev-parse", "refs/heads/"+b)
+		for _, r := range results {
+			b := r.Name
+			sha := gitOut(r.Repo, "rev-parse", r.Ref)
 			var files []TestFile
 			var missing []string
 			for _, f := range adopted {
-				content, err := gitShow(a.ws.Origin, sha, f.Path)
+				content, err := gitShow(r.Repo, sha, f.Path)
 				if err != nil {
 					missing = append(missing, f.Path)
 					continue
@@ -145,19 +178,19 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 				add(b+": adopted tests still there", false, "missing %v", missing)
 				continue
 			}
-			run := runReturnedTestsAt(a.ws.Origin, sha, files, overlays, "")
+			run := runReturnedTestsAt(r.Repo, sha, files, overlays, "")
 			add(b+": adopted tests still catch the original bug", run.Err == nil && run.Failed && run.Ran > 0 && len(run.Broken) == 0,
 				"err=%v failed=%v ran=%d broken=%q: %s", run.Err, run.Failed, run.Ran, run.Broken, truncate(strings.TrimSpace(run.Output), 600))
-			out, failed, err := runNormal(a.ws.Origin, sha, overlays, e.NormalTest)
+			out, failed, err := runNormal(r.Repo, sha, overlays, e.NormalTest)
 			add(b+": "+strings.Join(e.NormalTest, " ")+" catches the original bug", err == nil && failed, "err=%v failed=%v: %s", err, failed, truncate(strings.TrimSpace(out), 600))
 		}
 	}
 
 	if len(e.RegistrationCommit) > 0 {
 		found := false
-		for _, b := range pushed {
-			for _, sha := range a.branchCommits(b) {
-				changes := commitChanges(a.ws.Origin, sha)
+		for _, r := range results {
+			for _, sha := range a.commits(r) {
+				changes := commitChanges(r.Repo, sha)
 				only := len(changes) > 0
 				for _, c := range changes {
 					if !slices.Contains(e.RegistrationCommit, c.Path) {
@@ -167,17 +200,17 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 				found = found || only
 			}
 		}
-		add(fmt.Sprintf("a commit that changes only %v", e.RegistrationCommit), found, "no pushed commit changes only those files")
+		add(fmt.Sprintf("a commit that changes only %v", e.RegistrationCommit), found, "no commit changes only those files")
 	}
 
 	if len(e.TestProseForbid) > 0 {
 		var hits []string
-		for _, b := range pushed {
-			for _, p := range strings.Split(gitOut(a.ws.Origin, "diff", "--name-only", "--diff-filter=AM", a.ws.Base, "refs/heads/"+b), "\n") {
+		for _, r := range results {
+			for _, p := range strings.Split(gitOut(r.Repo, "diff", "--name-only", "--diff-filter=AM", a.ws.Base, r.Ref), "\n") {
 				if p == "" || !isTestFile(p) {
 					continue
 				}
-				content, err := gitShow(a.ws.Origin, "refs/heads/"+b, p)
+				content, err := gitShow(r.Repo, r.Ref, p)
 				if err != nil {
 					continue
 				}
@@ -191,7 +224,7 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 			}
 		}
 		sort.Strings(hits)
-		add("pushed test names and comments describe behavior", len(hits) == 0, "%s", strings.Join(hits, "; "))
+		add("test names and comments describe behavior", len(hits) == 0, "%s", strings.Join(hits, "; "))
 	}
 
 	for _, m := range e.PushedFileMentions {
