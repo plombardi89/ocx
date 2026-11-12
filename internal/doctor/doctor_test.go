@@ -202,3 +202,12 @@ func TestDoctorFailsWhenAnotherFileSetsPolicies(t *testing.T) {
 		t.Fatalf("install with another file's policies: %+v", r)
 	}
 }
+
+func TestMissingGitHubProtectionIsOnlyAWarning(t *testing.T) {
+	if r := protectionResult("protection", "main", "a/b", []string{"deletion"}); r.Status != check.Warn {
+		t.Fatalf("missing rules: %+v", r)
+	}
+	if r := protectionResult("protection", "main", "a/b", []string{"deletion", "non_fast_forward", "pull_request", "required_status_checks"}); r.Status != check.Pass {
+		t.Fatalf("all rules: %+v", r)
+	}
+}

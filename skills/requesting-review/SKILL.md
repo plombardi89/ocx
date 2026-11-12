@@ -52,7 +52,7 @@ If a regression test for a BLOCKER or MAJOR fix is genuinely impractical (for ex
 
 MINOR and NIT findings: fix them if cheap, without regression tests; otherwise list them for Phil in your summary.
 
-**TODOs for Phil:** the report lists every TODO the change adds. They don't block the push, but they block merging: list each one for Phil in your summary and in the pull request under "Decisions for Phil", and open the pull request as a draft (see the `git-workflow` skill).
+**TODOs for Phil:** the report lists every TODO the change adds. They don't block the push, but they block merging: list each one for Phil in your summary under "Decisions for Phil". On GitHub, put them in the pull request too and open it as a draft (see the `git-workflow` skill).
 
 **Round cap:** if round 3 still returns REQUEST_CHANGES, stop and escalate to Phil with the outstanding findings. Do not start round 4.
 
@@ -72,4 +72,4 @@ Read the hook's message. It means the commit has no approval, the approval is fo
 | "The fix is obviously right; a regression test is overkill." | BLOCKER and MAJOR fixes always get one. The reviewer checks it fails on the old head. |
 | "I'll write a test that passes, that's a regression test." | It must fail on the reviewed commit first. Run it there before committing the fix. |
 | "`// Regression test for review finding 2` explains why the test exists." | Comments and test names stand on their own. Describe the behavior the test protects. |
-| "The TODO is minor; no need to bother Phil." | Every new TODO goes to Phil, and the pull request stays a draft until he decides. |
+| "The TODO is minor; no need to bother Phil." | Every new TODO goes to Phil, and on GitHub the pull request stays a draft until he decides. |
