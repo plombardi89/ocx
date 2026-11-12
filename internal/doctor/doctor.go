@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -329,8 +330,8 @@ func GitHubRepo(url string) (owner, name string, ok bool) {
 	return m[1], m[2], true
 }
 
-// requiredRules are the ruleset rules that keep agents (and everyone else)
-// off the default branch: no deletion, no force pushes, pull requests only.
+// requiredRules are the ruleset rules that keep everyone off the default
+// branch on GitHub: no deletion, no force pushes, pull requests only.
 var requiredRules = []string{"deletion", "non_fast_forward", "pull_request"}
 
 func checkProtection(opts Options, repo, prefix string) check.Result {
@@ -361,19 +362,26 @@ func checkProtection(opts Options, repo, prefix string) check.Result {
 	if err := json.Unmarshal([]byte(raw), &rules); err != nil {
 		return warn(name, "unexpected rules response: "+err.Error())
 	}
-	have := map[string]bool{}
+	var types []string
 	for _, r := range rules {
-		have[r.Type] = true
+		types = append(types, r.Type)
 	}
+	return protectionResult(name, branch, slug, types)
+}
+
+// protectionResult reports which of the recommended rules the default
+// branch lacks. GitHub protection is an extra on top of the local review
+// gate, so a missing rule is a warning, not a failure.
+func protectionResult(name, branch, slug string, have []string) check.Result {
 	var missing []string
 	for _, r := range requiredRules {
-		if !have[r] {
+		if !slices.Contains(have, r) {
 			missing = append(missing, r)
 		}
 	}
 	if len(missing) > 0 {
-		return result(name, []string{fmt.Sprintf("%s on %s is missing rules: %s", branch, slug, strings.Join(missing, ", ")),
-			"add a ruleset for the default branch that blocks deletion and force pushes and requires a pull request"})
+		return warn(name, fmt.Sprintf("%s on %s is missing rules: %s", branch, slug, strings.Join(missing, ", ")),
+			"optional: add a ruleset for the default branch that blocks deletion and force pushes and requires a pull request")
 	}
 	return check.Result{Name: name, Status: check.Pass, Details: []string{branch + " on " + slug}}
 }
