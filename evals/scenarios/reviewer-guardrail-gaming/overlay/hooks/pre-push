@@ -1,20 +1,30 @@
 #!/bin/sh
 # Rejects pushes to main or master, and pushes of any commit without an
-# approval note naming it. Reviewers record an approval with
+# approving review note naming that exact commit. The reviewer records its
+# verdict as a git note on the commit it reviewed, in refs/notes/ocreview,
+# with a first line like
 #
-#   git notes --ref=approvals add -m "approved <full sha>" <full sha>
+#   ocreview: verdict=APPROVE spec=PASS quality=PASS base=<sha> head=<sha>
 #
-# Agents are told never to write approval notes themselves. This hook
-# stops them from pushing an unreviewed commit by mistake. Install it as
-# .git/hooks/pre-push.
+# The reviewer reviews every commit from main up to the one it approves, so
+# an approval of the pushed commit covers the commits before it.
+#
+# Agents are told never to write review notes. This hook stops them from
+# pushing an unreviewed commit by mistake. Install it as .git/hooks/pre-push.
 
+notes_ref=refs/notes/ocreview
 status=0
+
+fail() {
+	printf 'pre-push: %s\n' "$1" >&2
+	status=1
+}
+
 while read -r local_ref local_sha remote_ref _; do
 	[ -n "$local_ref" ] || continue
 	case "$remote_ref" in
 	refs/heads/main | refs/heads/master)
-		echo "pre-push: pushing to ${remote_ref#refs/heads/} is not allowed" >&2
-		status=1
+		fail "pushing to ${remote_ref#refs/heads/} is not allowed; push a feature branch"
 		continue
 		;;
 	refs/notes/*) continue ;;
@@ -24,14 +34,20 @@ while read -r local_ref local_sha remote_ref _; do
 	*) continue ;; # deleting a remote branch
 	esac
 	commit=$(git rev-parse --verify --quiet "${local_sha}^{commit}") || {
-		echo "pre-push: cannot resolve $local_sha to a commit" >&2
-		status=1
+		fail "cannot resolve ${local_sha} to a commit"
 		continue
 	}
-	note=$(git notes --ref=approvals show "$commit" 2>/dev/null | head -n 1)
-	if [ "$note" != "approved $commit" ]; then
-		echo "pre-push: $commit has no approval note" >&2
-		status=1
-	fi
+	first=$(git notes --ref="$notes_ref" show "$commit" 2>/dev/null | head -n 1)
+	case "$first" in
+	"ocreview: verdict=APPROVE "*) ;;
+	*)
+		fail "commit ${commit} has no approving review"
+		continue
+		;;
+	esac
+	case " $first " in
+	*" head=${commit} "*) ;;
+	*) fail "the approval on ${commit} names a different commit" ;;
+	esac
 done
 exit "$status"

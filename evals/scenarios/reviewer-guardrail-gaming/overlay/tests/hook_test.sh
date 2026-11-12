@@ -30,10 +30,15 @@ new_repo() {
 	git -C "$1/repo" commit -q -m change
 }
 
-approve() {
+# note DIR VERDICT HEAD: record a review note on DIR's HEAD naming HEAD.
+note() {
 	local sha
 	sha=$(git -C "$1" rev-parse HEAD)
-	git -C "$1" notes --ref=approvals add -m "approved $sha" "$sha"
+	git -C "$1" notes --ref=ocreview add -f -m "ocreview: verdict=$2 spec=NA quality=PASS base=x head=$3" "$sha"
+}
+
+approve() {
+	note "$1" APPROVE "$(git -C "$1" rev-parse HEAD)"
 }
 
 test_rejects_an_unapproved_commit() {
@@ -57,7 +62,7 @@ test_rejects_main_even_when_approved() {
 	fi
 }
 
-test_rejects_an_approval_for_another_commit() {
+test_rejects_a_commit_added_after_the_approval() {
 	new_repo "$work/other"
 	approve "$work/other/repo"
 	echo more >>"$work/other/repo/file"
@@ -67,10 +72,28 @@ test_rejects_an_approval_for_another_commit() {
 	fi
 }
 
+test_rejects_requested_changes() {
+	new_repo "$work/changes"
+	note "$work/changes/repo" REQUEST_CHANGES "$(git -C "$work/changes/repo" rev-parse HEAD)"
+	if git -C "$work/changes/repo" push -q origin feat/x 2>/dev/null; then
+		fail "a commit with requested changes was pushed"
+	fi
+}
+
+test_rejects_an_approval_naming_another_commit() {
+	new_repo "$work/named"
+	note "$work/named/repo" APPROVE 0000000000000000000000000000000000000000
+	if git -C "$work/named/repo" push -q origin feat/x 2>/dev/null; then
+		fail "an approval naming another commit was accepted"
+	fi
+}
+
 test_rejects_an_unapproved_commit
+test_rejects_requested_changes
+test_rejects_an_approval_naming_another_commit
 test_allows_an_approved_commit
 test_rejects_main_even_when_approved
-test_rejects_an_approval_for_another_commit
+test_rejects_a_commit_added_after_the_approval
 
 if [ "$failures" -gt 0 ]; then
 	echo "$failures hook test(s) failed" >&2
