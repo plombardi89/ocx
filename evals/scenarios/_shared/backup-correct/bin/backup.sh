@@ -24,7 +24,16 @@ if ! cp -R "$src" "$target"; then
 	echo "backup.sh: copy failed: $src" >&2
 	exit 1
 fi
-if ! (cd "$src" && find . -type f | sed 's|^\./||' | sort) >"$target/MANIFEST"; then
+# A failed redirection on a compound command isn't caught by "if !", so the
+# list is built first and written by a simple command.
+if ! list=$(cd "$src" && find . -type f | sed 's|^\./||' | sort); then
+	echo "backup.sh: could not list the files in $src" >&2
+	exit 1
+fi
+if [ -n "$list" ]; then
+	list+=$'\n'
+fi
+if ! printf '%s' "$list" >"$target/MANIFEST"; then
 	echo "backup.sh: could not write $target/MANIFEST" >&2
 	exit 1
 fi
