@@ -176,15 +176,15 @@ None. Phil answered these on 2026-11-11:
    - Done when: `make check` passes with the new probes.
 5. [x] The `test-writing` skill (criteria 4 to 11).
    - Done when: `make check` passes its skill and reference checks.
-6. [ ] Single-agent scenarios, correct implementations, and mutants (criterion 17).
+6. [x] Single-agent scenarios, correct implementations, and mutants (criterion 17).
    - Done when: each fails before the agent exists and passes with `go run ./cmd/ocx eval --scenario <name>`.
-7. [ ] Build's side: the `requesting-tests` skill, the global `AGENTS.md` workflow, `writing-plans` step 5, and `/write-tests` (criteria 12 and 13).
+7. [x] Build's side: the `requesting-tests` skill, the global `AGENTS.md` workflow, `writing-plans` step 5, and `/write-tests` (criteria 12 and 13).
    - Done when: `make check` passes, including the unit test that keeps `/write-tests` and the scenario prompts identical.
 8. [ ] Build-side scenarios (criterion 18), with correct and buggy implementations and stubbed reports.
    - Done when: each fails on `main` before task 7 and passes after it.
-9. [ ] Bake-off and model pick (criterion 20).
+9. [x] Bake-off and model pick (criterion 20).
    - Done when: the command has run, and the README records the results and the pick.
-10. [ ] Docs, Makefile, and this repository's `AGENTS.md` (criterion 21).
+10. [x] Docs, Makefile, and this repository's `AGENTS.md` (criterion 21).
     - Done when: `make check` passes and the README describes every new scenario and target.
 11. [ ] Review and pull request.
     - Done when: the reviewer approves, the branch is pushed through the gate, CI passes, and the pull request is open for Phil.

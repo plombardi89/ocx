@@ -202,7 +202,7 @@ All models are set in `config/opencode.jsonc`. MAI models are never used; `make 
 | `plan-critic` | `gpt-6-astra#high` | Different family from the driver, and a different model from the reviewer; tied for best in our model comparison (below) |
 | `debugger` | `claude-opus-5.5#xhigh` | Deep, long-context investigation; build applies its fix and the reviewer still checks it |
 | `consultant` | `gpt-6.1-sol#xhigh` | Different family from the driver, so its second opinion doesn't share build's assumptions |
-| `test-writer` | `claude-sonnet-5.5#xhigh` | A different model from the driver; see the comparison below |
+| `test-writer` | `claude-sonnet-5.5#xhigh` | A different model from the driver; won our model comparison (below), passing every run and fastest |
 | `explore` | `claude-haiku-5.5` | Matches Opus on code-search recall, much faster |
 
 Planned for later slices: `security-reviewer` (GPT-6 Astra high), `lead`/`implementer`.
@@ -237,6 +237,22 @@ Astra stays the critic: it ties Sol on quality, and using a different model at e
 
 1. **Debugger stays on Opus:** equally correct and about 3 times faster. Build applies its fix and the reviewer, on GPT, still checks it.
 2. **Consultant stays on Sol:** Opus was faster, but a second opinion is only useful if it doesn't share the stuck agent's assumptions, and build runs on Opus.
+
+### Test-writer model comparison
+
+`make bakeoff TAG=tests` ran the 5 test-writer comparison scenarios 3 times each on 3 models (45 runs, 2026-11-12). Every model flagged the same criteria on every planted bug and reported the vague criterion as a GAP every time.
+
+| Model | Passed | Mean time | Mutants caught in `test-writer-clean` |
+| --- | --- | --- | --- |
+| Claude Sonnet 5.5 (xhigh) | 15/15 | 3m37s | 15/15 |
+| GPT-6.1 Sol (xhigh) | 13/15 | 4m47s | 14/15 |
+| GPT-6 Astra (high) | 12/15 | 4m34s | 15/15 |
+
+1. **Sonnet stays the test-writer:** it passed every run and was the fastest.
+2. **Most GPT failures were a check, not the tests.** Three runs failed because the Python scenario then required the report to name the cause, a shared default list. Their tests failed on the bug and passed on the correct code, and the report gave expected and actual results, as the skill asks. That check has since been dropped: naming causes is the reviewer's job. One Astra run errored before it started.
+3. **Sol's one real miss:** in one run, its tests didn't catch items sorted in the wrong order.
+
+Sonnet is the same family as the Opus driver. The comparison rules only prefer a different family to break a tie, and there was none.
 
 ## Permissions model
 
