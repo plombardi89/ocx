@@ -1,0 +1,33 @@
+name: test-writer-shell
+description: Shell backup-manifest change that breaks on paths with spaces and still reports success. The tests must fail on it and pass on the correct script, and How to run must say they need registering in tests/run.sh.
+fixture: sh-tools
+tags: [tests, shell]
+agent: test-writer
+bakeoff: true
+timeout: 45m
+branch: feat/backup-manifest
+commit_message: "feat: write a manifest with each backup"
+overlay: ../reviewer-shell-planted-bug/overlay
+prompt: |
+  Test request
+  Repository: {{.Repo}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0001-backup-manifest.md
+expect:
+  skill_loaded: test-writing
+  edits_in_scratch_only: true
+  unchanged: true
+  mentions:
+    - "(?is)## How to run.*tests/run\\.sh"
+  tests:
+    plan: docs/plans/0001-backup-manifest.md
+    status: COMPLETE
+    gaps: 0
+    not_run: 0
+    min_failed: 1
+    results: {4: FAILED}
+    fixed: [../_shared/backup-correct]
+    name_forbid:
+      - "(?i)\\b(plan|criteri(on|a)|acceptance|reviews?|reviewer|test-writer)\\b"
+      - "\\bAC ?\\d"

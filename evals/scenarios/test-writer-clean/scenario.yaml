@@ -1,0 +1,36 @@
+name: test-writer-clean
+description: The correct pagination change. Every criterion passes, with no invented failures or gaps, and the tests catch five mutants of the code.
+fixture: go-service
+tags: [tests]
+agent: test-writer
+bakeoff: true
+timeout: 45m
+branch: feat/product-pagination
+commits:
+  - message: "feat: paginate the product list"
+    overlays: [../reviewer-planted-bug/overlay, ../_shared/pagination-fix]
+prompt: |
+  Test request
+  Repository: {{.Repo}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0001-product-pagination.md
+expect:
+  skill_loaded: test-writing
+  edits_in_scratch_only: true
+  unchanged: true
+  tests:
+    plan: docs/plans/0001-product-pagination.md
+    status: COMPLETE
+    passed: 7
+    failed: 0
+    gaps: 0
+    mutants:
+      - {name: no limit cap, overlay: ../_shared/pagination-mutants/no-cap}
+      - {name: a panic past the end, overlay: ../_shared/pagination-mutants/past-end-panic}
+      - {name: a default limit of 10, overlay: ../_shared/pagination-mutants/default-limit-10}
+      - {name: items not sorted by ID, overlay: ../_shared/pagination-mutants/sorted-by-id-descending}
+      - {name: total counting only the page, overlay: ../_shared/pagination-mutants/total-counts-the-page}
+    name_forbid:
+      - "(?i)\\b(plan|criteri(on|a)|acceptance|reviews?|reviewer|test-writer)\\b"
+      - "\\bAC ?\\d"
