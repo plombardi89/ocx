@@ -1,0 +1,43 @@
+name: e2e-test-failed
+description: The pagination plan and its planted-bug code are committed. With the /write-tests text, build adopts the test-writer's failing tests exactly, fixes the code, and pushes an approved branch whose adopted tests still catch the original bug.
+fixture: go-service
+tags: [tests, e2e]
+agent: build
+timeout: 75m
+branch: feat/product-pagination
+commit_message: "feat: paginate the product list"
+overlay: ../reviewer-planted-bug/overlay
+prompt: |
+  Get independent tests for the plan docs/plans/0001-product-pagination.md by following the `requesting-tests` skill. First check that every task in the plan is implemented and committed on the current branch, and that the project's tests pass. When every adopted test passes and nothing is waiting for Phil, follow the `requesting-review` skill, and push the branch once it's approved.
+expect:
+  e2e:
+    pushed_branch_prefix: feat/
+    remote_main_unchanged: true
+    pushed_head_approved: true
+    dispatches:
+      - agent: test-writer
+        prefix: Test request
+        min: 1
+        max: 2
+        forbid:
+          - "(?i)tests? (all )?(pass|passed|passing|are green|is green)"
+          - "(?i)already (verified|checked|tested|reviewed)"
+          - "(?i)\\b(just|only) (check|look|focus|test|review)"
+          - "(?i)(trivial|simple|small|tiny) (change|fix)"
+          - "(?i)\\b(focus on|edge cases?|make sure)\\b"
+      - agent: reviewer
+        prefix: Review request
+        min: 1
+        forbid:
+          - "(?i)tests? (all )?(pass|passed|passing|are green|is green)"
+          - "(?i)already (verified|checked|tested|reviewed)"
+          - "(?i)\\b(just|only) (check|look|focus|test|review)"
+          - "(?i)(trivial|simple|small|tiny) (change|fix)"
+          - "(?i)\\b(focus on|edge cases?|make sure)\\b"
+    dispatch_order: [test-writer, reviewer]
+    adopted_exactly: true
+    buggy: [../_shared/pagination-planted]
+    normal_test: [go, test, ./...]
+    test_prose_forbid:
+      - "(?i)\\b(plan|criteri(on|a)|acceptance|reviews?|reviewer|test-writer)\\b"
+      - "\\bAC ?\\d"

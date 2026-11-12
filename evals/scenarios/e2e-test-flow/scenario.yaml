@@ -1,0 +1,42 @@
+name: e2e-test-flow
+description: Build implements the approved split-amounts plan, gets independent tests from the test-writer with the bare template, adopts them exactly in their own commit, gets the change reviewed, and pushes a feat/ branch.
+fixture: go-service
+tags: [tests, e2e]
+agent: build
+timeout: 75m
+base_overlays: [base]
+prompt: |
+  Implement the plan docs/plans/0002-split-amounts.md. Phil has approved it. Follow your working agreements.
+
+  Push the branch to origin when it's approved. Don't open a pull request; this remote is not on GitHub. This is a non-interactive run: don't ask questions; if you get blocked, explain why and stop.
+expect:
+  e2e:
+    pushed_branch_prefix: feat/
+    remote_main_unchanged: true
+    pushed_head_approved: true
+    dispatches:
+      - agent: test-writer
+        prefix: Test request
+        min: 1
+        max: 2
+        forbid:
+          - "(?i)tests? (all )?(pass|passed|passing|are green|is green)"
+          - "(?i)already (verified|checked|tested|reviewed)"
+          - "(?i)\\b(just|only) (check|look|focus|test|review)"
+          - "(?i)(trivial|simple|small|tiny) (change|fix)"
+          - "(?i)\\b(focus on|edge cases?|make sure)\\b"
+      - agent: reviewer
+        prefix: Review request
+        min: 1
+        forbid:
+          - "(?i)tests? (all )?(pass|passed|passing|are green|is green)"
+          - "(?i)already (verified|checked|tested|reviewed)"
+          - "(?i)\\b(just|only) (check|look|focus|test|review)"
+          - "(?i)(trivial|simple|small|tiny) (change|fix)"
+          - "(?i)\\b(focus on|edge cases?|make sure)\\b"
+    dispatch_order: [test-writer, reviewer]
+    adopted_exactly: true
+    pushed_files_include: ["internal/money/split.go", "internal/money/*_test.go"]
+    test_prose_forbid:
+      - "(?i)\\b(plan|criteri(on|a)|acceptance|reviews?|reviewer|test-writer)\\b"
+      - "\\bAC ?\\d"

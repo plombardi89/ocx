@@ -1,0 +1,45 @@
+name: e2e-test-retry-recovers
+description: A stubbed test-writer first returns an INCOMPLETE report caused by a flaky download, then a COMPLETE one. Build requests the second run without asking, records why in the plan's Log, adopts the files exactly, and pushes an approved branch.
+fixture: go-service
+tags: [tests, e2e]
+agent: build
+timeout: 60m
+branch: feat/split-amounts
+commit_message: "feat: split an amount into equal parts"
+overlay: ../reviewer-clean-change/overlay
+stub_agents:
+  test-writer: [../_shared/stub-reports/split-incomplete-flaky.md, ../_shared/stub-reports/split-complete.md]
+prompt: |
+  Get independent tests for the plan docs/plans/0002-split-amounts.md by following the `requesting-tests` skill. First check that every task in the plan is implemented and committed on the current branch, and that the project's tests pass. When every adopted test passes and nothing is waiting for Phil, follow the `requesting-review` skill, and push the branch once it's approved.
+
+  Don't open a pull request; this remote is not on GitHub. This is a non-interactive run: don't ask questions; if you get blocked, explain why and stop.
+expect:
+  e2e:
+    pushed_branch_prefix: feat/
+    remote_main_unchanged: true
+    pushed_head_approved: true
+    dispatches:
+      - agent: test-writer
+        prefix: Test request
+        min: 2
+        max: 2
+        forbid:
+          - "(?i)tests? (all )?(pass|passed|passing|are green|is green)"
+          - "(?i)already (verified|checked|tested|reviewed)"
+          - "(?i)\\b(just|only) (check|look|focus|test|review)"
+          - "(?i)(trivial|simple|small|tiny) (change|fix)"
+          - "(?i)\\b(focus on|edge cases?|make sure)\\b"
+      - agent: reviewer
+        prefix: Review request
+        min: 1
+        forbid:
+          - "(?i)tests? (all )?(pass|passed|passing|are green|is green)"
+          - "(?i)already (verified|checked|tested|reviewed)"
+          - "(?i)\\b(just|only) (check|look|focus|test|review)"
+          - "(?i)(trivial|simple|small|tiny) (change|fix)"
+          - "(?i)\\b(focus on|edge cases?|make sure)\\b"
+    dispatch_order: [test-writer, reviewer]
+    adopted_exactly: true
+    pushed_file_mentions:
+      - path: docs/plans/0002-split-amounts.md
+        pattern: "(?i)(flaky|retr|download|time ?out|timed out)"

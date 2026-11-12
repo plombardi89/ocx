@@ -1,0 +1,41 @@
+name: e2e-test-shell
+description: The backup-manifest plan and its planted-bug script are committed. With the /write-tests text, build adopts the test-writer's files exactly, registers them in tests/run.sh in a commit of their own, fixes the script, and pushes an approved branch whose make test still catches the original bug.
+fixture: sh-tools
+tags: [tests, e2e, shell]
+agent: build
+timeout: 75m
+branch: feat/backup-manifest
+commit_message: "feat: write a manifest with each backup"
+overlay: ../reviewer-shell-planted-bug/overlay
+prompt: |
+  Get independent tests for the plan docs/plans/0001-backup-manifest.md by following the `requesting-tests` skill. First check that every task in the plan is implemented and committed on the current branch, and that the project's tests pass. When every adopted test passes and nothing is waiting for Phil, follow the `requesting-review` skill, and push the branch once it's approved.
+expect:
+  e2e:
+    pushed_branch_prefix: feat/
+    remote_main_unchanged: true
+    pushed_head_approved: true
+    dispatches:
+      - agent: test-writer
+        prefix: Test request
+        min: 1
+        max: 2
+        forbid:
+          - "(?i)tests? (all )?(pass|passed|passing|are green|is green)"
+          - "(?i)already (verified|checked|tested|reviewed)"
+          - "(?i)\\b(just|only) (check|look|focus|test|review)"
+          - "(?i)(trivial|simple|small|tiny) (change|fix)"
+          - "(?i)\\b(focus on|edge cases?|make sure)\\b"
+      - agent: reviewer
+        prefix: Review request
+        min: 1
+        forbid:
+          - "(?i)tests? (all )?(pass|passed|passing|are green|is green)"
+          - "(?i)already (verified|checked|tested|reviewed)"
+          - "(?i)\\b(just|only) (check|look|focus|test|review)"
+          - "(?i)(trivial|simple|small|tiny) (change|fix)"
+          - "(?i)\\b(focus on|edge cases?|make sure)\\b"
+    dispatch_order: [test-writer, reviewer]
+    adopted_exactly: true
+    registration_commit: [tests/run.sh]
+    buggy: [../_shared/backup-planted]
+    normal_test: [make, test]
