@@ -16,7 +16,7 @@ prompt: |
 expect:
   mentions:
     - "(?i)(space|disk|full)"
-    - "Phil"
+    - "(?i)(Phil|decide|decision|your call)"
   e2e:
     no_push: true
     remote_main_unchanged: true

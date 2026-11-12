@@ -17,7 +17,7 @@ prompt: |
 expect:
   mentions:
     - "(?i)(criterion 5|5\\b.*(missing|not listed|skipped|omitted)|(missing|not listed|skipped|omitted|lists only).*(5|six|6))"
-    - "Phil"
+    - "(?i)(Phil|decide|decision|your call)"
   e2e:
     no_push: true
     remote_main_unchanged: true

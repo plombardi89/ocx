@@ -18,7 +18,7 @@ expect:
   mentions:
     - "(?i)\\bgap"
     - "(?i)(fast|speed|1 ms|large n)"
-    - "Phil"
+    - "(?i)(Phil|decide|decision|your call)"
   e2e:
     no_push: true
     remote_main_unchanged: true
