@@ -170,9 +170,9 @@ None. Phil answered these on 2026-11-11:
    - Done when: unit tests cover a report whose claimed PASSED tests actually fail, broken test code, returned files with no tests in them, a correct implementation, and a mutant that an existing test catches but the returned tests miss.
 3. [x] Build-side checks, stubbed agents, and uncommitted changes (criterion 16).
    - Done when: unit tests cover each check, every existing scenario still loads, and `make check` passes.
-4. [ ] Agent, prompt, permissions, scratch root, and probes (criteria 1 to 3).
+4. [x] Agent, prompt, permissions, scratch root, and probes (criteria 1 to 3).
    - Done when: `make check` passes with the new probes.
-5. [ ] The `test-writing` skill (criteria 4 to 11).
+5. [x] The `test-writing` skill (criteria 4 to 11).
    - Done when: `make check` passes its skill and reference checks.
 6. [ ] Single-agent scenarios, correct implementations, and mutants (criterion 17).
    - Done when: each fails before the agent exists and passes with `go run ./cmd/ocx eval --scenario <name>`.
@@ -213,3 +213,4 @@ None. Phil answered these on 2026-11-11:
 6. 2026-11-12: Task 1 done. The test-writer's scratch root doesn't exist until task 4, so the unit test for each agent's own root uses the debugger's.
 7. 2026-11-12: Task 2 done. The eval runs returned tests in a clone of Head, so the work repository's worktrees stay as they were.
 8. 2026-11-12: Task 3 done. A stubbed agent's staged prompt file is replaced, because the copied configuration loads after the staged additions and would win. The stub runs a script in the agent's own scratch root, the one place its permissions let it run scripts.
+9. 2026-11-12: Tasks 4 and 5 done, in one commit, because the agent's permissions name the skill. 204 probes pass. Git global options are blocked by policy, so the skill has the test-writer run every command from its scratch worktree, undo mutations with the edit tool, and run scripts by absolute path.
