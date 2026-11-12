@@ -33,6 +33,8 @@ type Workspace struct {
 	Commits    []string
 	// Before is the work repository's state just before the agent runs.
 	Before repoState
+	// stubs are directories outside Dir that Remove also deletes.
+	stubs []string
 }
 
 // repoState is what a run must leave as it found it, unless the scenario
@@ -185,11 +187,81 @@ func Prepare(root string, s Scenario, dir string, opts stage.Options) (*Workspac
 			return nil, err
 		}
 	}
+	if s.Uncommitted != "" {
+		if err := stage.CopyTree(filepath.Join(s.Dir, s.Uncommitted), ws.Work); err != nil {
+			return nil, fmt.Errorf("apply uncommitted overlay: %w", err)
+		}
+	}
 	if err := stage.Stage(root, ws.Work, opts); err != nil {
 		return nil, err
 	}
+	agents := make([]string, 0, len(s.StubAgents))
+	for a := range s.StubAgents {
+		agents = append(agents, a)
+	}
+	sort.Strings(agents)
+	for _, agent := range agents {
+		var reports []string
+		for _, r := range s.StubAgents[agent] {
+			reports = append(reports, filepath.Join(s.Dir, r))
+		}
+		if err := ws.stub(agent, reports); err != nil {
+			return nil, fmt.Errorf("stub %s: %w", agent, err)
+		}
+	}
 	ws.Before = captureState(ws.Work)
 	return ws, nil
+}
+
+// stubPrompt replaces a stubbed agent's prompt. The agent runs a script in
+// its own scratch root, which is the one place its permissions let it run
+// scripts, and returns what the script prints.
+const stubPrompt = `You are standing in for this agent while the agent that launched you is being tested. Do nothing else: run exactly this command, then make its output, unchanged, your entire final message.
+
+bash %s
+`
+
+// stubScript prints the next report on each run and repeats the last one.
+const stubScript = `#!/usr/bin/env bash
+set -euo pipefail
+dir=%q
+n=$(cat "$dir/count" 2>/dev/null || echo 0)
+n=$((n + 1))
+echo "$n" >"$dir/count"
+if [ "$n" -gt %d ]; then n=%d; fi
+head=$(git rev-parse HEAD 2>/dev/null || echo unknown)
+sed "s/{{HEAD}}/$head/g" "$dir/report-$n.md"
+`
+
+// stub makes agent return the reports, one per launch, by replacing its
+// staged prompt.
+func (ws *Workspace) stub(agent string, reports []string) error {
+	root, ok := config.ScratchRoots[agent]
+	if !ok {
+		return fmt.Errorf("%s has no scratch root", agent)
+	}
+	prompt := filepath.Join(ws.Work, ".opencode", "prompts", agent+".md")
+	if _, err := os.Stat(prompt); err != nil {
+		return err
+	}
+	dir := filepath.Join(root, "stub-"+filepath.Base(ws.Dir))
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	ws.stubs = append(ws.stubs, dir)
+	for i, r := range reports {
+		if err := stage.CopyTree(r, filepath.Join(dir, fmt.Sprintf("report-%d.md", i+1))); err != nil {
+			return err
+		}
+	}
+	script := filepath.Join(dir, "next.sh")
+	if err := os.WriteFile(script, []byte(fmt.Sprintf(stubScript, dir, len(reports), len(reports))), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(prompt, []byte(fmt.Sprintf(stubPrompt, script)), 0o644)
 }
 
 // applyCommits makes the scenario's commits on the current branch.
@@ -232,5 +304,10 @@ func seedNote(ws *Workspace, path, sha string) error {
 	return err
 }
 
-// Remove deletes the workspace.
-func (ws *Workspace) Remove() error { return os.RemoveAll(ws.Dir) }
+// Remove deletes the workspace and its stub directories.
+func (ws *Workspace) Remove() error {
+	for _, d := range ws.stubs {
+		_ = os.RemoveAll(d)
+	}
+	return os.RemoveAll(ws.Dir)
+}

@@ -39,26 +39,42 @@ type testRun struct {
 	Err    error // the tests couldn't be run at all
 }
 
-// runReturnedTests checks out Head in a temporary directory, lays the
-// overlays over it in order, adds the returned test files, and runs only
-// those tests.
-func runReturnedTests(ws *Workspace, files []TestFile, overlays []string, broken string) testRun {
+// checkout clones src into a temporary directory, checks out rev, and lays
+// the overlays over it in order. cleanup removes the directory.
+func checkout(src, rev string, overlays []string) (repo string, cleanup func(), err error) {
 	dir, err := os.MkdirTemp("", "ocx-tests-run-")
 	if err != nil {
-		return testRun{Err: err}
+		return "", func() {}, err
 	}
-	defer os.RemoveAll(dir)
-	repo := filepath.Join(dir, "repo")
-	if _, err := gitx.Run(dir, "clone", "-q", "--no-checkout", ws.Work, repo); err != nil {
-		return testRun{Err: err}
+	cleanup = func() { os.RemoveAll(dir) }
+	repo = filepath.Join(dir, "repo")
+	if _, err := gitx.Run(dir, "clone", "-q", "--no-checkout", src, repo); err != nil {
+		return "", cleanup, err
 	}
-	if _, err := gitx.Run(repo, "checkout", "-q", "--detach", ws.Head); err != nil {
-		return testRun{Err: err}
+	if _, err := gitx.Run(repo, "checkout", "-q", "--detach", rev); err != nil {
+		return "", cleanup, err
 	}
 	for _, o := range overlays {
 		if err := stage.CopyTree(o, repo); err != nil {
-			return testRun{Err: fmt.Errorf("overlay %s: %w", o, err)}
+			return "", cleanup, fmt.Errorf("overlay %s: %w", o, err)
 		}
+	}
+	return repo, cleanup, nil
+}
+
+// runReturnedTests runs the returned tests on the workspace's Head with the
+// overlays laid over it.
+func runReturnedTests(ws *Workspace, files []TestFile, overlays []string, broken string) testRun {
+	return runReturnedTestsAt(ws.Work, ws.Head, files, overlays, broken)
+}
+
+// runReturnedTestsAt checks out rev of src with the overlays, adds the
+// returned test files, and runs only those tests.
+func runReturnedTestsAt(src, rev string, files []TestFile, overlays []string, broken string) testRun {
+	repo, cleanup, err := checkout(src, rev, overlays)
+	defer cleanup()
+	if err != nil {
+		return testRun{Err: err}
 	}
 	byLang := map[string][]TestFile{}
 	for _, f := range files {

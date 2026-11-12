@@ -326,30 +326,60 @@ func (a *asserter) e2e(e E2E) []Check {
 		}
 	}
 
-	agent := e.DispatchAgent
-	if agent == "" {
-		agent = "reviewer"
+	ds := append([]Dispatch{}, e.Dispatches...)
+	legacy := e.DispatchAgent
+	if legacy == "" {
+		legacy = "reviewer"
 	}
-	var dispatches []Part
+	if !slices.ContainsFunc(ds, func(d Dispatch) bool { return d.Agent == legacy }) {
+		ds = append(ds, Dispatch{Agent: legacy, Prefix: e.DispatchPrefix, Forbid: e.DispatchForbid, Min: e.DispatchMin})
+	}
+	for _, d := range ds {
+		checks = append(checks, a.checkDispatch(d)...)
+	}
+	if len(e.DispatchOrder) > 0 {
+		checks = append(checks, a.checkDispatchOrder(e.DispatchOrder))
+	}
+	checks = append(checks, a.buildSide(e, pushed)...)
+	return checks
+}
+
+// dispatches returns the launches of agent, in order.
+func (a *asserter) dispatches(agent string) []Part {
+	var out []Part
 	for _, p := range a.tr.ToolCalls("subagent") {
 		if p.State != nil && p.State.Input["agent"] == agent {
-			dispatches = append(dispatches, p)
+			out = append(out, p)
 		}
 	}
-	if e.DispatchMin > 0 {
-		add(fmt.Sprintf("%s launched at least %d time(s)", agent, e.DispatchMin), len(dispatches) >= e.DispatchMin, "launched %d time(s)", len(dispatches))
+	return out
+}
+
+func (a *asserter) checkDispatch(d Dispatch) []Check {
+	var checks []Check
+	add := func(name string, ok bool, detail string, args ...any) {
+		checks = append(checks, Check{Name: name, OK: ok, Detail: fmt.Sprintf(detail, args...)})
+	}
+	dispatches := a.dispatches(d.Agent)
+	if d.Min > 0 {
+		add(fmt.Sprintf("%s launched at least %d time(s)", d.Agent, d.Min), len(dispatches) >= d.Min, "launched %d time(s)", len(dispatches))
+	}
+	if d.Max != nil {
+		add(fmt.Sprintf("%s launched at most %d time(s)", d.Agent, *d.Max), len(dispatches) <= *d.Max, "launched %d time(s)", len(dispatches))
 	}
 	want := ""
-	if r, ok := a.cfg.Agents[agent]; ok {
-		want = r.Model
+	if a.cfg != nil {
+		if r, ok := a.cfg.Agents[d.Agent]; ok {
+			want = r.Model
+		}
 	}
 	for i, p := range dispatches {
 		prompt, _ := p.State.Input["prompt"].(string)
-		name := fmt.Sprintf("%s dispatch %d", agent, i+1)
-		if e.DispatchPrefix != "" {
-			add(name+" uses the request template", strings.HasPrefix(strings.TrimSpace(prompt), e.DispatchPrefix), "prompt starts %q", truncate(prompt, 60))
+		name := fmt.Sprintf("%s dispatch %d", d.Agent, i+1)
+		if d.Prefix != "" {
+			add(name+" uses the request template", strings.HasPrefix(strings.TrimSpace(prompt), d.Prefix), "prompt starts %q", truncate(prompt, 60))
 		}
-		for _, f := range e.DispatchForbid {
+		for _, f := range d.Forbid {
 			if loc := regexp.MustCompile(f).FindString(prompt); loc != "" {
 				add(name+" has no framing", false, "matched %q: %q", f, loc)
 			}
@@ -357,26 +387,56 @@ func (a *asserter) e2e(e E2E) []Check {
 		if m, ok := p.State.Input["model"].(string); ok && m != "" {
 			add(name+" does not override the model", false, "model=%s", m)
 		}
+		if a.cfg == nil {
+			continue // unit tests have no sessions to export
+		}
 		child := ChildSessionID(p)
 		if child == "" || want == "" {
 			add(name+" child session found", false, "child=%q", child)
 			continue
 		}
-		exp, err := ExportSession(a.ctx, a.ws.Work, child, filepath.Join(a.outDir, fmt.Sprintf("%s-%d.json", agent, i+1)))
+		exp, err := ExportSession(a.ctx, a.ws.Work, child, filepath.Join(a.outDir, fmt.Sprintf("%s-%d.json", d.Agent, i+1)))
 		if err != nil {
 			add(name+" export", false, "%v", err)
 			continue
 		}
-		c := checkModel(exp, agent, want)
+		c := checkModel(exp, d.Agent, want)
 		c.Name = name + " " + c.Name
 		checks = append(checks, c)
 	}
 	return checks
 }
 
+// checkDispatchOrder requires the first launch of each agent to come in the
+// given order.
+func (a *asserter) checkDispatchOrder(order []string) Check {
+	name := "first launches in order " + strings.Join(order, ", ")
+	first := map[string]int{}
+	for i, p := range a.tr.ToolCalls("subagent") {
+		if p.State == nil {
+			continue
+		}
+		agent, _ := p.State.Input["agent"].(string)
+		if _, seen := first[agent]; !seen {
+			first[agent] = i
+		}
+	}
+	last := -1
+	for _, agent := range order {
+		i, ok := first[agent]
+		if !ok {
+			return Check{Name: name, Detail: agent + " was never launched"}
+		}
+		if i < last {
+			return Check{Name: name, Detail: agent + " was first launched too early"}
+		}
+		last = i
+	}
+	return Check{Name: name, OK: true}
+}
+
 // changedFiles lists files that differ from the workspace's base commit,
-// whether committed, modified, or new. Staged configuration is excluded by
-// .git/info/exclude.
+// whether committed, modified, or new. Staged configuration ignores itself.
 func (a *asserter) changedFiles() []string {
 	seen := map[string]bool{}
 	var out []string

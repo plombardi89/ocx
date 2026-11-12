@@ -44,6 +44,14 @@ type Scenario struct {
 	Prompt  string `yaml:"prompt"`
 	Timeout string `yaml:"timeout"`
 	Expect  Expect `yaml:"expect"`
+	// Uncommitted is an overlay, relative to the scenario directory, copied
+	// over the work tree after the commits and left uncommitted.
+	Uncommitted string `yaml:"uncommitted"`
+	// StubAgents makes each listed agent return fixed reports instead of
+	// doing its work: the files, relative to the scenario directory, one per
+	// launch in order, with the last one repeating. "{{HEAD}}" in a report
+	// becomes the repository's HEAD at the time of the launch.
+	StubAgents map[string][]string `yaml:"stub_agents"`
 
 	Dir string `yaml:"-"`
 }
@@ -160,6 +168,49 @@ type E2E struct {
 	// PushedFilesInclude are path globs that must each match at least one
 	// file changed by the pushed branches.
 	PushedFilesInclude []string `yaml:"pushed_files_include"`
+
+	// Dispatches checks the launches of several subagents. The single
+	// Dispatch fields above still check one agent, the reviewer by default.
+	// DispatchOrder lists agents whose first launches must come in order.
+	Dispatches    []Dispatch `yaml:"dispatches"`
+	DispatchOrder []string   `yaml:"dispatch_order"`
+	// AdoptedExactly requires a pushed commit that adds exactly the test
+	// files of the last test-writer report build received, with identical
+	// content, and changes nothing else.
+	AdoptedExactly bool `yaml:"adopted_exactly"`
+	// Buggy are overlays, relative to the scenario directory, that put the
+	// original buggy implementation back. Laid over each pushed head, the
+	// adopted tests on their own must fail, and so must NormalTest, the
+	// project's normal test command.
+	Buggy      []string `yaml:"buggy"`
+	NormalTest []string `yaml:"normal_test"`
+	// RegistrationCommit requires a pushed commit that changes only these
+	// files.
+	RegistrationCommit []string `yaml:"registration_commit"`
+	// NoPush requires that no branch besides main reached origin.
+	NoPush bool `yaml:"no_push"`
+	// TestProseForbid are regular expressions that no test name or comment
+	// in the test files the pushed branches change may match.
+	TestProseForbid []string `yaml:"test_prose_forbid"`
+	// PushedFileMentions requires each file, as pushed, to match a pattern.
+	PushedFileMentions []FileMention `yaml:"pushed_file_mentions"`
+}
+
+// Dispatch checks the launches of one subagent: each prompt starts with
+// Prefix and matches none of Forbid, on the agent's pinned model, and there
+// are at least Min and at most Max of them.
+type Dispatch struct {
+	Agent  string   `yaml:"agent"`
+	Prefix string   `yaml:"prefix"`
+	Forbid []string `yaml:"forbid"`
+	Min    int      `yaml:"min"`
+	Max    *int     `yaml:"max"`
+}
+
+// FileMention requires a pushed file to match a regular expression.
+type FileMention struct {
+	Path    string `yaml:"path"`
+	Pattern string `yaml:"pattern"`
 }
 
 // TimeoutDuration returns the scenario timeout, defaulting to 30 minutes.
@@ -265,6 +316,24 @@ func (s Scenario) Validate(root string) error {
 	default:
 		errs = append(errs, fmt.Errorf("%s: verdict must be APPROVE, REQUEST_CHANGES, REVISE, ROOT_CAUSE, STUCK, HYPOTHESES, or NEED_INFO", prefix))
 	}
+	if s.Uncommitted != "" {
+		if _, err := os.Stat(filepath.Join(s.Dir, s.Uncommitted)); err != nil {
+			errs = append(errs, fmt.Errorf("%s: uncommitted overlay %q not found", prefix, s.Uncommitted))
+		}
+	}
+	for agent, reports := range s.StubAgents {
+		if _, ok := config.ScratchRoots[agent]; !ok {
+			errs = append(errs, fmt.Errorf("%s: can only stub an agent with a scratch root, not %q", prefix, agent))
+		}
+		if len(reports) == 0 {
+			errs = append(errs, fmt.Errorf("%s: stub for %s needs at least one report", prefix, agent))
+		}
+		for _, r := range reports {
+			if _, err := os.Stat(filepath.Join(s.Dir, r)); err != nil {
+				errs = append(errs, fmt.Errorf("%s: stub report %q not found", prefix, r))
+			}
+		}
+	}
 	for _, d := range s.BaseOverlays {
 		if _, err := os.Stat(filepath.Join(s.Dir, d)); err != nil {
 			errs = append(errs, fmt.Errorf("%s: base overlay %q not found", prefix, d))
@@ -301,9 +370,27 @@ func (s Scenario) Validate(root string) error {
 			}
 		}
 	}
-	if s.Expect.E2E != nil {
-		patterns = append(patterns, s.Expect.E2E.DispatchForbid...)
-		patterns = append(patterns, s.Expect.E2E.CommentForbid...)
+	if e := s.Expect.E2E; e != nil {
+		patterns = append(patterns, e.DispatchForbid...)
+		patterns = append(patterns, e.CommentForbid...)
+		patterns = append(patterns, e.TestProseForbid...)
+		for _, d := range e.Dispatches {
+			if d.Agent == "" {
+				errs = append(errs, fmt.Errorf("%s: every dispatch needs an agent", prefix))
+			}
+			patterns = append(patterns, d.Forbid...)
+		}
+		for _, m := range e.PushedFileMentions {
+			patterns = append(patterns, m.Pattern)
+		}
+		for _, o := range e.Buggy {
+			if _, err := os.Stat(filepath.Join(s.Dir, o)); err != nil {
+				errs = append(errs, fmt.Errorf("%s: buggy overlay %q not found", prefix, o))
+			}
+		}
+		if len(e.Buggy) > 0 && len(e.NormalTest) == 0 {
+			errs = append(errs, fmt.Errorf("%s: buggy needs normal_test", prefix))
+		}
 		for _, g := range s.Expect.E2E.ChangedOnly {
 			if _, err := filepath.Match(g, ""); err != nil {
 				errs = append(errs, fmt.Errorf("%s: bad glob %q: %w", prefix, g, err))
