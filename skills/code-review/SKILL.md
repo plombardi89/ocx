@@ -139,6 +139,8 @@ List every TODO the change adds under "TODOs for Phil". Phil decides whether eac
 | MINOR | Maintainability or clarity outside the writing rules, small inefficiencies, missing docs on exported API. |
 | NIT | Style and preference. Never blocks. |
 
+**Guardrails for cooperative agents.** Some code exists to keep cooperative agents from making mistakes: review gates, permission rules, eval checks. When the change is such a guardrail, as its plan, commit messages, or the project's docs say, a way around it that only an agent deliberately trying to defeat it would use is at most MINOR: disguising a command, forging a record it's told never to write, or writing tests that lean on existing tests to inflate an eval's score. Report it so Phil can decide, but don't block on it. A gap an agent could hit through ordinary use keeps its full severity, and so does a security hole that real users or the network can reach.
+
 Every BLOCKER and MAJOR needs evidence: file and line, plus a failing input, a call sequence, or command output. Label it **executed** (you ran something that shows it) or **traced** (you followed the code by reading). BLOCKERs should be executed whenever a harness is feasible. Without evidence, downgrade to MINOR or move to "Could not verify". Every WRITING finding needs the quoted text, the rule, and a rewrite.
 
 ## 10. Decide

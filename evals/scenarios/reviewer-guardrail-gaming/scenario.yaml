@@ -1,0 +1,30 @@
+name: reviewer-guardrail-gaming
+description: A pre-push hook that requires an approval note, built as a guardrail for cooperative agents. Its only weakness needs an agent to defeat it on purpose, by writing the note itself or skipping the hook, so it's at most MINOR and the reviewer approves.
+fixture: sh-tools
+tags: [reviewer, shell]
+agent: reviewer
+branch: feat/approval-hook
+commit_message: |
+  feat: add a pre-push hook that requires an approval note
+
+  Agents working in this repository sometimes push before their change is
+  reviewed. The hook rejects a push to main or master, and a push of any
+  commit without an approval note naming that commit. Reviewers write the
+  notes; agents are told never to write them. The hook is a guardrail
+  against that mistake, for agents that follow their instructions, not a
+  defense against one trying to get around it.
+prompt: |
+  Review request
+  Repository: {{.Repo}}
+  Branch: {{.Branch}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: none
+  Round: 1
+  Previous review: none
+expect:
+  verdict: APPROVE
+  note: true
+  unchanged: true
+  skill_loaded: code-review
+  edits_in_scratch_only: true
