@@ -152,13 +152,9 @@ func cleanRepoPath(p string) (string, bool) {
 }
 
 var (
-	goTestName    = regexp.MustCompile(`(?m)^func (Test\w+)\(`)
-	pyTestName    = regexp.MustCompile(`(?m)^\s*def (test_\w+)\(`)
-	shTestName    = regexp.MustCompile(`(?m)^\s*(?:function\s+)?(test_\w+)\s*\(\)`)
-	slashComment  = regexp.MustCompile(`//[^\n]*|/\*(?s:.*?)\*/`)
-	hashComment   = regexp.MustCompile(`(?m)(?:^|\s)(#[^\n]*)`)
-	shebang       = regexp.MustCompile(`^#!`)
-	quotedStrings = regexp.MustCompile("\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*'|`[^`]*`")
+	goTestName = regexp.MustCompile(`(?m)^func (Test\w+)\(`)
+	pyTestName = regexp.MustCompile(`(?m)^\s*def (test_\w+)\(`)
+	shTestName = regexp.MustCompile(`(?m)^\s*(?:function\s+)?(test_\w+)\s*\(\)`)
 )
 
 // TestNames returns the test function names in a returned test file.
@@ -184,21 +180,99 @@ func TestNames(f TestFile) []string {
 }
 
 // testProse returns a file's test names and comments: the text that must
-// describe behavior rather than where the test came from. String literals
-// are removed first, so a "#" or "//" inside one isn't a comment.
+// describe behavior rather than where the test came from.
 func testProse(f TestFile) []string {
 	prose := TestNames(f)
-	code := quotedStrings.ReplaceAllString(f.Content, `""`)
-	if strings.HasSuffix(f.Path, ".go") {
-		prose = append(prose, slashComment.FindAllString(code, -1)...)
-		return prose
-	}
-	for _, m := range hashComment.FindAllStringSubmatch(code, -1) {
-		if !shebang.MatchString(m[1]) {
-			prose = append(prose, m[1])
-		}
+	switch {
+	case strings.HasSuffix(f.Path, ".go"):
+		prose = append(prose, goComments(f.Content)...)
+	case strings.HasSuffix(f.Path, ".py"):
+		prose = append(prose, hashComments(f.Content, false)...)
+	default:
+		prose = append(prose, hashComments(f.Content, true)...)
 	}
 	return prose
+}
+
+// goComments returns the comments in Go source. Quotes inside a comment,
+// such as an apostrophe, don't start a string, and comment markers inside
+// a string, rune, or raw string don't start a comment.
+func goComments(src string) []string {
+	var out []string
+	for i := 0; i < len(src); i++ {
+		switch {
+		case strings.HasPrefix(src[i:], "//"):
+			end := strings.IndexByte(src[i:], '\n')
+			if end < 0 {
+				end = len(src) - i
+			}
+			out = append(out, src[i:i+end])
+			i += end
+		case strings.HasPrefix(src[i:], "/*"):
+			end := strings.Index(src[i+2:], "*/")
+			if end < 0 {
+				return append(out, src[i:])
+			}
+			out = append(out, src[i:i+2+end+2])
+			i += 2 + end + 1
+		case src[i] == '"' || src[i] == '\'':
+			i = skipQuoted(src, i, src[i], true, false)
+		case src[i] == '`':
+			i = skipQuoted(src, i, '`', false, true)
+		}
+	}
+	return out
+}
+
+// hashComments returns the "#" comments in Python or shell source, without
+// a leading shebang line. In shell, "#" starts a comment only at the start
+// of a word, so "$#" isn't one.
+func hashComments(src string, shell bool) []string {
+	var out []string
+	for i := 0; i < len(src); i++ {
+		switch c := src[i]; {
+		case c == '#':
+			if shell && i > 0 && !strings.ContainsRune(" \t\n;&|()", rune(src[i-1])) {
+				continue
+			}
+			end := strings.IndexByte(src[i:], '\n')
+			if end < 0 {
+				end = len(src) - i
+			}
+			if !(i == 0 && strings.HasPrefix(src, "#!")) {
+				out = append(out, src[i:i+end])
+			}
+			i += end
+		case !shell && (strings.HasPrefix(src[i:], `"""`) || strings.HasPrefix(src[i:], "'''")):
+			end := strings.Index(src[i+3:], src[i:i+3])
+			if end < 0 {
+				return out
+			}
+			i += 3 + end + 2
+		case c == '"' || c == '\'':
+			// Shell single quotes have no escapes, and shell strings may
+			// span lines.
+			i = skipQuoted(src, i, c, !(shell && c == '\''), shell)
+		}
+	}
+	return out
+}
+
+// skipQuoted returns the index of the quote that closes the string opened at
+// src[start]. A string that may not span lines ends at the end of its line
+// if it never closes.
+func skipQuoted(src string, start int, quote byte, escapes, multiline bool) int {
+	for j := start + 1; j < len(src); j++ {
+		switch {
+		case escapes && src[j] == '\\':
+			j++
+		case src[j] == quote:
+			return j
+		case src[j] == '\n' && !multiline:
+			return j
+		}
+	}
+	return len(src)
 }
 
 // checkTestsReport checks a test-writer report against the plan and the

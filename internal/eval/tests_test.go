@@ -222,6 +222,9 @@ func TestTestsReportChecks(t *testing.T) {
 		{name: "a comment that names the source", report: func(r *report) {
 			r.files = []TestFile{{Path: "internal/a/x_test.go", Content: "package a\n\nimport \"testing\"\n\n// Written by the test-writer.\nfunc TestCap(t *testing.T) {}\n"}}
 		}, expect: TestsExpect{NameForbid: []string{`(?i)test-writer`}}, fails: []string{"describe behavior"}},
+		{name: "an apostrophe in a comment that names the source", report: func(r *report) {
+			r.files = []TestFile{{Path: "internal/a/x_test.go", Content: "package a\n\nimport \"testing\"\n\n// This test's cap comes from the plan's value.\nfunc TestCap(t *testing.T) {}\n"}}
+		}, expect: TestsExpect{NameForbid: []string{`(?i)\bplan\b`}}, fails: []string{"describe behavior"}},
 		{name: "a test-writer literal the behavior needs", report: func(*report) {},
 			expect: TestsExpect{NameForbid: []string{`(?i)test-writer`}}},
 		{name: "exact results", report: func(*report) {},
@@ -305,12 +308,29 @@ func TestUnchangedComparesWithTheStateBeforeTheRun(t *testing.T) {
 		t.Fatal("a changed source file went unnoticed")
 	}
 
+	// A worktree that existed before the run must still be there after it.
+	kept := testsRepo(t)
+	existing := filepath.Join(t.TempDir(), "existing")
+	if _, err := gitx.Run(kept.Work, "worktree", "add", "--detach", existing, "HEAD"); err != nil {
+		t.Fatal(err)
+	}
+	kept.Before = captureState(kept.Work)
+	if got := unchanged(kept); len(got) > 0 {
+		t.Fatalf("an existing worktree left alone: %v", got)
+	}
+	if _, err := gitx.Run(kept.Work, "worktree", "remove", "--force", existing); err != nil {
+		t.Fatal(err)
+	}
+	if got := unchanged(kept); len(got) != 1 || !strings.Contains(got[0], "removed ["+existing+"]") {
+		t.Fatalf("a removed worktree: %v", got)
+	}
+
 	leaked := testsRepo(t)
 	if _, err := gitx.Run(leaked.Work, "worktree", "add", "--detach", filepath.Join(t.TempDir(), "wt"), "HEAD"); err != nil {
 		t.Fatal(err)
 	}
 	got := unchanged(leaked)
-	if len(got) != 1 || !strings.Contains(got[0], "no leftover worktrees") {
+	if len(got) != 1 || !strings.Contains(got[0], "worktrees as they were") {
 		t.Fatalf("leaked worktree: %v", got)
 	}
 }
@@ -345,5 +365,23 @@ func TestUnchangedSeesEditsToFilesGitQuotes(t *testing.T) {
 	a := &asserter{ws: ws}
 	if got := failing(a.run(Expect{Unchanged: true})); len(got) == 0 {
 		t.Fatal("an edit to café.txt went unnoticed")
+	}
+}
+
+func TestCommentsAreFoundOutsideStrings(t *testing.T) {
+	cases := []struct {
+		path, src string
+		want      []string
+	}{
+		{"a_test.go", "x := \"// not a comment\" // it's a comment\n", []string{"// it's a comment"}},
+		{"a_test.go", "x := `/* raw\n*/` /* the plan's */ y := '\"'\n// last", []string{"/* the plan's */", "// last"}},
+		{"test_a.py", "s = \"# not one\"  # it's one\nd = \"\"\"\n# docstring\n\"\"\"\n", []string{"# it's one"}},
+		{"a_test.sh", "#!/usr/bin/env bash\necho \"$#\" '# no' # the plan's\nx=\"a\n# still a string\"\n", []string{"# the plan's"}},
+	}
+	for _, c := range cases {
+		got := testProse(TestFile{Path: c.path, Content: c.src})
+		if strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("%s: comments = %q, want %q", c.path, got, c.want)
+		}
 	}
 }

@@ -179,13 +179,18 @@ func (a *asserter) run(e Expect) []Check {
 		after := captureState(a.ws.Work)
 		changes := a.ws.Before.changes(after)
 		add("repository unchanged", len(changes) == 0, "%s", strings.Join(changes, "; "))
-		var extra []string
+		var added, removed []string
 		for _, wt := range after.Worktrees {
 			if !slices.Contains(a.ws.Before.Worktrees, wt) {
-				extra = append(extra, wt)
+				added = append(added, wt)
 			}
 		}
-		add("no leftover worktrees", len(extra) == 0, "still registered: %v", extra)
+		for _, wt := range a.ws.Before.Worktrees {
+			if !slices.Contains(after.Worktrees, wt) {
+				removed = append(removed, wt)
+			}
+		}
+		add("worktrees as they were", len(added) == 0 && len(removed) == 0, "added %v, removed %v", added, removed)
 	}
 
 	if e.SkillLoaded != "" {
