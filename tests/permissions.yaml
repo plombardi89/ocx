@@ -213,6 +213,9 @@ probes:
   - { agent: build, action: shell, resource: "ls /mnt/c> /dev/null", expect: deny }
   - { agent: build, action: shell, resource: "wc -l </mnt/c/Windows/win.ini", expect: deny }
   - { agent: build, action: shell, resource: "ls /mnt/cache", expect: deny }
+  - { agent: build, action: shell, resource: "git commit -m \"fix: block /mnt/c\"", expect: deny }
+  - { agent: build, action: shell, resource: "git commit -F - <<'MSG'\nKeep agents out of /mnt/c/Users.\nMSG", expect: deny }
+  - { agent: build, action: shell, resource: "git commit -F commit-msg.txt", expect: allow }
 
   # other built-ins: no pushing, committing, or verdict notes
   - { agent: plan, action: shell, resource: "git push -u origin feat/x", expect: deny }
