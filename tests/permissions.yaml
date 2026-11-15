@@ -243,6 +243,8 @@ probes:
   - { agent: plan, action: shell, resource: "ls /mnt/c/Users", expect: deny }
   - { agent: explore, action: shell, resource: "ls /mnt/c/Users", expect: deny }
   - { agent: general, action: shell, resource: "ls /mnt/c/Users", expect: deny }
+  - { agent: test-writer, action: shell, resource: "go run /mnt/c/Users/phil/tool.go", expect: deny }
+  - { agent: test-writer, action: shell, resource: "bash /tmp/opencode/tests/shop-abc1234-kqvx/run.sh /mnt/c/Users", expect: deny }
   - { agent: build, action: shell, resource: "ls /mnt/c>files.txt", expect: deny }
   - { agent: build, action: shell, resource: "ls /mnt/c> /dev/null", expect: deny }
   - { agent: build, action: shell, resource: "wc -l </mnt/c/Windows/win.ini", expect: deny }
