@@ -30,11 +30,11 @@ func TestVersionPrintsOneLineFromAnyDirectory(t *testing.T) {
 	}
 }
 
-func TestUsageListsOnlyApplyRemoveAndVersion(t *testing.T) {
+func TestUsageListsOnlyTheFourCommands(t *testing.T) {
 	s := newSandbox(t)
 	r := s.run()
 	got := commandsListedIn(r.combined())
-	want := []string{"apply", "remove", "version"}
+	want := []string{"apply", "remove", "update", "version"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("the usage lists the commands %v, want %v\n%s", got, want, r.shown())
 	}

@@ -112,7 +112,7 @@ func TestTheBuiltBinaryWorksOutsideTheCheckout(t *testing.T) {
 	}
 }
 
-func TestOnlyThreeCommands(t *testing.T) {
+func TestRemovedCommandsAreUsageErrors(t *testing.T) {
 	var out, errOut strings.Builder
 	if code := run([]string{"check"}, &out, &errOut); code != 2 {
 		t.Errorf("ocx check exited %d", code)
