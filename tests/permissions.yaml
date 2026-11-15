@@ -202,6 +202,8 @@ probes:
   - { agent: build, action: shell, resource: "ls '/mnt/c'", expect: deny }
   - { agent: build, action: shell, resource: "find \"/mnt/c\" -name notes.txt", expect: deny }
   - { agent: build, action: shell, resource: "ls /mnt/c\t-l", expect: deny }
+  - { agent: build, action: shell, resource: "git config --get --file /mnt/c/Users/phil/.gitconfig user.name", expect: deny }
+  - { agent: build, action: shell, resource: "git config --list --file /mnt/c/Users/phil/.gitconfig", expect: deny }
   - { agent: plan, action: shell, resource: "ls /mnt/c/Users", expect: deny }
   - { agent: explore, action: shell, resource: "ls /mnt/c/Users", expect: deny }
   - { agent: general, action: shell, resource: "ls /mnt/c/Users", expect: deny }
