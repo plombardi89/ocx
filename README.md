@@ -134,15 +134,19 @@ templates/AGENTS.md       starting point for a project's AGENTS.md
 tests/permissions.yaml    permission probes: "agent X doing Y must be allow/ask/deny"
 evals/                    fixture project, scenarios, and results (results are gitignored)
 AGENTS.md                 instructions for agents working on this repository
-.github/workflows/        CI: make check-offline on every pull request and push to main
-cmd/ocx, internal/        Go tooling behind the Makefile
+.github/workflows/        check: make check-offline on every pull request and push to main;
+                          release: builds ocx on every push to main and publishes it
+ocx.go                    embeds the configuration above into the ocx binary
+cmd/ocx/                  the ocx binary: apply, remove, version
+internal/                 the apply package, the checks, and the eval tool behind the Makefile
 ```
 
 ## Make targets
 
 | Target | What it does | Cost |
 | --- | --- | --- |
-| `make check` | gofmt, vet, Go tests, the fixtures' own tests, config/skill/command lint, writing-rule lint, permission probes against OpenCode's resolved config | free, ~seconds |
+| `make test` | gofmt, vet, and the Go tests, which include config/skill/command lint, scenario validation, and writing-rule lint | free, ~seconds |
+| `make check` | `make test` with permission probes against OpenCode's resolved config, plus the fixtures' own tests | free, ~seconds |
 | `make check-offline` | Same without running OpenCode; CI runs this on every pull request | free |
 | `make fixtures-test` | The eval fixtures' own tests, which every scenario assumes pass before it adds its changes | free |
 | `make eval-reviewer` | Reviewer scenarios with the pinned reviewer model | tokens |
@@ -152,8 +156,9 @@ cmd/ocx, internal/        Go tooling behind the Makefile
 | `make eval-e2e` | End-to-end runs: planning, debugging, the test-writer flow, and implement → review → push | tokens |
 | `make bakeoff` | One tag's comparison scenarios × `BAKEOFF_MODELS` × `REPS` (`TAG=reviewer`, `critic`, `debug`, or `tests`) | tokens |
 | `make verify` | `check` + every eval: the single "is everything good?" entrypoint | tokens |
-| `make install` / `make uninstall` | Show, or with `APPLY=1` make, the global install or its removal | — |
-| `make doctor REPOS="…"` | Check the install, what OpenCode loads, tools, and each repository's `AGENTS.md` and branch protection | free |
+| `make eval ARGS="--scenario <name>"` | One scenario, or `--list` to list them | tokens |
+| `make ocx OUT=…` | Build `ocx` from this checkout, stamped with its commit, and print its path | — |
+| `make apply` | Build `ocx` from this checkout and run `ocx apply`, to try a branch on purpose (`ARGS="--dry-run"` or `ARGS="--config-dir DIR"`) | — |
 
 Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run event streams, session exports, and final reports). Failing runs keep their workspace under `/tmp/opencode/ocx-eval/` for inspection.
 
@@ -276,15 +281,29 @@ Sonnet is the same family as the Opus driver. The comparison rules only prefer a
 
 ## Using it
 
-### Install globally
+### Install
 
-1. `make install` shows what would change in `~/.config/opencode` (or `$XDG_CONFIG_HOME/opencode`) without changing anything.
-2. `make install APPLY=1` makes the changes. Each piece becomes a link into this checkout, so `git pull` updates the agents. A global `opencode.jsonc` that only sets `$schema` is backed up and replaced. Anything else ocx didn't create is a conflict, so you can merge your settings first; `FORCE=1` backs it up and replaces it. Backups go in `~/.config/opencode/.ocx-backups/`, which OpenCode doesn't read, and never replace earlier ones. If any step fails, install undoes the steps before it.
-3. In each project, add an `AGENTS.md` (start from `templates/AGENTS.md`).
-4. Protect each project's default branch at your git provider: block deletion and force pushes, and require a pull request. On GitHub that's a ruleset; private repositories need GitHub Pro for it.
-5. Check everything with `make doctor REPOS="/path/to/project ..."`.
+1. Download `ocx` for your machine from the `latest` release, check it, and apply it:
 
-`make uninstall APPLY=1` removes the links and restores what install backed up.
+   ```sh
+   curl -fsSLO https://github.com/plombardi89/ocx/releases/latest/download/ocx-linux-amd64
+   curl -fsSLO https://github.com/plombardi89/ocx/releases/latest/download/SHA256SUMS
+   sha256sum --check --ignore-missing SHA256SUMS
+   install -m 755 ocx-linux-amd64 ~/.local/bin/ocx
+   ocx apply
+   ```
+
+   Use `ocx-linux-arm64` on arm64. With Go installed, `go install github.com/plombardi89/ocx/cmd/ocx@main` builds the same binary instead.
+2. In each project, add an `AGENTS.md` (start from `templates/AGENTS.md`).
+3. Protect each project's default branch at your git provider: block deletion and force pushes, and require a pull request. On GitHub that's a ruleset; private repositories need GitHub Pro for it.
+
+`ocx apply` writes the agents, prompts, working agreements, skills, and commands as plain files into `~/.config/opencode` (or `$XDG_CONFIG_HOME/opencode`, or `--config-dir DIR`). It overwrites whatever is at those paths and keeps no backups, so merge any settings of your own from a global `opencode.jsonc` first. `--dry-run` shows the changes without making them. It lists what it wrote in `.ocx-files` there.
+
+### Upgrade, try a branch, or remove
+
+1. **Upgrade:** download the newer binary, or rerun `go install`, then run `ocx apply` again. It writes the new files and deletes the ones the new version no longer ships. `ocx version` prints the commit a binary was built from.
+2. **Try a branch of this repository:** `make apply` from the checkout. Run `ocx apply` from a released binary to go back.
+3. **Remove:** `ocx remove` deletes the files `ocx apply` wrote.
 
 ### Removing the old review hook
 
@@ -297,13 +316,6 @@ if grep -q ocx-managed-hook "$hooks/pre-push" 2>/dev/null; then
 	if [ -f "$hooks/pre-push.local" ]; then mv "$hooks/pre-push.local" "$hooks/pre-push"; fi
 fi
 ```
-
-### What `make doctor` checks
-
-1. Every link is in place and points into this checkout.
-2. OpenCode, started in an empty project, loads every agent with its pinned model and a non-empty prompt, and all permission probes pass against the installed configuration. A missing `prompts` link otherwise fails silently: OpenCode loads the agents with empty prompts. Doctor also fails if any other configuration file OpenCode loads, such as a system-wide one, sets policies, because the probes can't account for how those combine with ocx's.
-3. The tools agents rely on: a working `gh` login, `gcc` for the race detector, and `shellcheck`.
-4. For each repository: there's an `AGENTS.md`. When the origin is on GitHub, doctor also warns if the default branch isn't protected.
 
 ## Changes to ocx itself
 

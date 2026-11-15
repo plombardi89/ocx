@@ -1,0 +1,67 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One run at a time, and a run that has started always finishes, so a
+# release is never left half-published.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: make check-offline
+
+  # A fresh checkout, separate from the checks, so nothing they leave
+  # behind marks the binaries as built from a modified tree.
+  release:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      # The binaries go outside the checkout: a file inside it would mark
+      # the next build as made from a modified tree.
+      - name: Build
+        run: |
+          dist="$RUNNER_TEMP/dist"
+          mkdir "$dist"
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -o "$dist/ocx-linux-$arch" ./cmd/ocx
+          done
+          cd "$dist" && sha256sum ocx-linux-amd64 ocx-linux-arm64 > SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tip=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$tip" != "$GITHUB_SHA" ]; then
+            echo "main has moved on to $tip; its own run publishes it."
+            exit 0
+          fi
+          if ! gh release view latest >/dev/null 2>&1; then
+            gh release create latest --target "$GITHUB_SHA" --title latest --notes "Publishing $GITHUB_SHA"
+          fi
+          dist="$RUNNER_TEMP/dist"
+          gh release upload latest "$dist/ocx-linux-amd64" "$dist/ocx-linux-arm64" "$dist/SHA256SUMS" --clobber
+          git push --force origin "$GITHUB_SHA:refs/tags/latest"
+          gh release edit latest --notes "Built from $GITHUB_SHA. Download the binary for your machine and check it against SHA256SUMS, then run \`ocx apply\`."

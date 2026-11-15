@@ -1,4 +1,4 @@
-# Permission probes for `ocx check`.
+# Permission probes, run by `make check`.
 #
 # Each probe asks: if this agent attempted this action on this resource, what
 # would OpenCode decide? Rules come from `opencode debug agents` (fully
