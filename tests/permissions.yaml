@@ -184,9 +184,10 @@ probes:
   - { agent: build, action: external_directory, resource: "/etc/*", expect: ask }
 
   # every agent: never reach into the Windows C: drive from a project
-  # elsewhere; lookalike paths aren't blocked.
-  # Shell probes are single commands, because OpenCode splits compound
-  # commands and checks each part.
+  # elsewhere. Any shell command containing /mnt/c is blocked, lookalikes
+  # such as /mnt/cache too; lookalike directories for the file tools still
+  # only ask. Shell probes are single commands, because OpenCode splits
+  # compound commands and checks each part.
   - { agent: build, action: external_directory, resource: "/mnt/c/*", expect: deny }
   - { agent: build, action: external_directory, resource: "/mnt/c", expect: deny }
   - { agent: build, action: external_directory, resource: "/mnt/c/Program Files/Git/etc/*", expect: deny }
@@ -208,8 +209,10 @@ probes:
   - { agent: plan, action: shell, resource: "ls /mnt/c/Users", expect: deny }
   - { agent: explore, action: shell, resource: "ls /mnt/c/Users", expect: deny }
   - { agent: general, action: shell, resource: "ls /mnt/c/Users", expect: deny }
-  - { agent: build, action: shell, resource: "ls /mnt/cache", expect: allow }
-  - { agent: build, action: shell, resource: "ls \"/mnt/cache\"", expect: allow }
+  - { agent: build, action: shell, resource: "ls /mnt/c>files.txt", expect: deny }
+  - { agent: build, action: shell, resource: "ls /mnt/c> /dev/null", expect: deny }
+  - { agent: build, action: shell, resource: "wc -l </mnt/c/Windows/win.ini", expect: deny }
+  - { agent: build, action: shell, resource: "ls /mnt/cache", expect: deny }
 
   # other built-ins: no pushing, committing, or verdict notes
   - { agent: plan, action: shell, resource: "git push -u origin feat/x", expect: deny }
