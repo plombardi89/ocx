@@ -3,7 +3,6 @@
 package update
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -230,22 +229,33 @@ func (o Options) version(bin string) (string, error) {
 	if limit == 0 {
 		limit = DefaultVersionTimeout
 	}
+	// The output goes to a file, not a pipe, so only the command itself
+	// has to finish in time: a child of it that keeps the output open
+	// doesn't hold up the update.
+	out, err := os.CreateTemp("", "ocx-version-*")
+	if err != nil {
+		return "", fmt.Errorf("run the new ocx's version command: %w", err)
+	}
+	defer func() {
+		_ = out.Close()
+		_ = os.Remove(out.Name())
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), limit)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, "version")
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	// A child of the binary that keeps the output open shouldn't hold the
-	// update after the time limit.
-	cmd.WaitDelay = time.Second
-	err := cmd.Run()
+	cmd.Stdout = out
+	err = cmd.Run()
 	if ctx.Err() != nil {
 		return "", fmt.Errorf("the new ocx's version command took longer than %s", limit)
 	}
 	if err != nil {
 		return "", fmt.Errorf("the new ocx's version command failed: %w", err)
 	}
-	first, _, _ := strings.Cut(out.String(), "\n")
+	printed, err := os.ReadFile(out.Name())
+	if err != nil {
+		return "", fmt.Errorf("read the new ocx's version: %w", err)
+	}
+	first, _, _ := strings.Cut(string(printed), "\n")
 	if first = strings.TrimSpace(first); first == "" {
 		return "", errors.New("the new ocx's version command printed nothing")
 	}

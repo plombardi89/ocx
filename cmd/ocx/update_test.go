@@ -224,3 +224,25 @@ func TestUpdateReplacesARealBinaryAndAppliesTheNewConfiguration(t *testing.T) {
 		}
 	})
 }
+
+func TestAnEmptyConfigDirWithoutApplyIsStillAUsageError(t *testing.T) {
+	for _, args := range [][]string{
+		{"update", "--config-dir", ""},
+		{"update", "--check", "--config-dir="},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			hits := serveRelease(t, []byte("#!/bin/sh\necho new-version\n"))
+			exe := fakeExecutable(t, "old\n")
+			var out, errOut strings.Builder
+			if code := run(args, &out, &errOut); code != 2 {
+				t.Errorf("exited %d, want 2; stdout=%q stderr=%q", code, out.String(), errOut.String())
+			}
+			if n := hits.Load(); n != 0 {
+				t.Errorf("made %d requests, want none", n)
+			}
+			if got, err := os.ReadFile(exe); err != nil || string(got) != "old\n" {
+				t.Errorf("the binary is %q, %v; want it unchanged", got, err)
+			}
+		})
+	}
+}

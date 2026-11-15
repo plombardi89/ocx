@@ -353,3 +353,16 @@ func TestATrailingSlashInTheLocationStillFindsTheFiles(t *testing.T) {
 		t.Errorf("requests: %v", r.hits)
 	}
 }
+
+func TestAVersionCommandWhoseChildKeepsTheOutputOpenStillCounts(t *testing.T) {
+	r, opts := standard(t)
+	// version exits at once, but its background child holds the output open
+	// for two seconds, well inside the time limit.
+	const binary = "#!/bin/sh\nsleep 2 &\necho new-version\nexit 0\n"
+	r.serve("ocx-linux-amd64", binary)
+	r.serve("SHA256SUMS", hexSum(binary)+"  ocx-linux-amd64\n")
+	res, err := Run(opts, false)
+	if err != nil || res.NewVersion != "new-version" {
+		t.Fatalf("version = %q, err = %v; want the update to succeed", res.NewVersion, err)
+	}
+}

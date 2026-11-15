@@ -34,12 +34,15 @@ func runUpdate(args []string, stdout, stderr io.Writer) error {
 	if err := fs.Parse(args); err != nil {
 		return usageError{err}
 	}
+	// Whether --config-dir was given, even empty, as from an unset variable.
+	dirGiven := false
+	fs.Visit(func(f *flag.Flag) { dirGiven = dirGiven || f.Name == "config-dir" })
 	switch {
 	case fs.NArg() > 0:
 		return usageError{fmt.Errorf("unexpected argument %q", fs.Arg(0))}
 	case *check && *applyAfter:
 		return usageError{errors.New("--check and --apply can't be used together")}
-	case *dir != "" && !*applyAfter:
+	case dirGiven && !*applyAfter:
 		return usageError{errors.New("--config-dir only goes with --apply")}
 	}
 	exe, err := executable()
@@ -71,7 +74,7 @@ func runUpdate(args []string, stdout, stderr io.Writer) error {
 	// The new binary carries the new configuration; this process still has
 	// the old one, so it can't apply it itself.
 	applyArgs := []string{"apply"}
-	if *dir != "" {
+	if dirGiven {
 		applyArgs = append(applyArgs, "--config-dir", *dir)
 	}
 	cmd := exec.Command(res.Path, applyArgs...)
