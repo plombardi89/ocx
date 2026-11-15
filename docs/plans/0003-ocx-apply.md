@@ -2,7 +2,7 @@
 
 Status: in-progress
 Branch: feat/apply
-Decisions: [0007](../adr/0007-no-hooks-and-ocx-out-of-the-loop.md), replaced by a new ADR in task 7
+Decisions: [0008](../adr/0008-ocx-apply-from-a-released-binary.md)
 
 ## Goal
 
@@ -63,21 +63,21 @@ None. Phil decided on 2026-11-15:
 
 ## Tasks
 
-1. [ ] Embed the files and add `ocx version` (criteria 1 and 2).
+1. [x] Embed the files and add `ocx version` (criteria 1 and 2).
    - Done when: a test reads every expected file from the embedded set, and tests cover the version text for a checkout build, a modified build, and a module build, using fake build information.
-2. [ ] `ocx apply` and `ocx remove` (criteria 3 to 9).
+2. [x] `ocx apply` and `ocx remove` (criteria 3 to 9).
    - Done when: unit tests cover a first apply, an apply that drops a file, a dry run, remove, an apply and a remove retried after some listed files are gone, a link and a directory in the way, a listed skill whose directory became a link (for apply's cleanup and for remove), `.ocx-files` entries with `..` and absolute paths, and a failed write of a file and of `.ocx-files` that leaves the old `.ocx-files` whole. Every link and path case has a file outside the configuration directory that must survive unchanged.
-3. [ ] Smoke test the built binary (criteria 1, 3, 8, and 12).
+3. [x] Smoke test the built binary (criteria 1, 3, 8, and 12).
    - Done when: a test builds `ocx` with `go build`, and from a directory outside the checkout runs `version`, `apply`, and `remove`, once with `--config-dir` and once with only `XDG_CONFIG_HOME` set to a temporary directory, checking the files after each. `make apply ARGS="--config-dir <temp>"` installs into that directory.
-4. [ ] Move `check` into the tests and `eval` into its own program (criterion 10).
+4. [x] Move `check` into the tests and `eval` into its own program (criterion 10).
    - Done when: `make test` fails when a skill is missing its `name`, and `make eval ARGS=--list` lists the scenarios.
-5. [ ] Remove the old commands and code (criterion 12).
+5. [x] Remove the old commands and code (criterion 12).
    - Done when: `go run ./cmd/ocx` prints only `apply`, `remove`, and `version`, and `make check` passes.
-6. [ ] The release workflow (criterion 11).
+6. [x] The release workflow (criterion 11).
    - Done when: `GOOS=linux GOARCH=amd64` and `GOARCH=arm64` builds with `CGO_ENABLED=0` succeed locally, and `actionlint` passes on the workflow.
-7. [ ] A new ADR that replaces 0007, keeping its decisions about hooks and the development loop and recording this one.
+7. [x] A new ADR that replaces 0007, keeping its decisions about hooks and the development loop and recording this one.
    - Done when: ADR 0007 is deleted and the new one names it in `Replaces:`.
-8. [ ] README and `AGENTS.md` (criterion 13).
+8. [x] README and `AGENTS.md` (criterion 13).
    - Done when: `make check` passes.
 9. [ ] Review and pull request.
    - Done when: the reviewer approves the pushed commit.
@@ -88,3 +88,4 @@ None. Phil decided on 2026-11-15:
 2. 2026-11-15: Critique round 1: REVISE (1 BLOCKER, 10 MAJOR, 2 MINOR). The BLOCKER was right: `ocx` only ran inside a checkout. Most MAJORs asked for backups, conversion of old installs, locking, and crash recovery. Phil chose to keep the tool simple instead: no backups, no compatibility with earlier installs, and `check` and `eval` move to the Makefile and tests. Kept from the critique: running from any directory, the ADR replacing 0007, the upgrade steps in the README, queued release runs, and checks before review for the version text and both builds.
 3. 2026-11-15: Critique round 2: REVISE (2 BLOCKER, 5 MAJOR, 1 WRITING). A queued workflow can't promise that every push publishes in order, so Phil agreed the release only has to end at the newest commit. Fixed the contradiction about which Makefile targets go. Added simple rules for links, `.ocx-files` entries, and failed file operations, a smoke test of the built binary, and numbered release steps. Doctor's checks of the global install are dropped, as a non-goal.
 4. 2026-11-15: Critique round 3: REVISE (1 BLOCKER, 3 MAJOR, 1 MINOR), the last round. Phil approved the plan with these fixes: the release promise now allows for a failed run, the link rule covers deletions and `remove`, `.ocx-files` is replaced by renaming a temporary file, and the task reference is corrected. For the release workflow, he chose a check of the real release right after the merge over testing the publish steps with a fake `gh`.
+5. 2026-11-15: Tasks 1 to 8 done. Go records the commit only when it builds in a regular checkout, not in a git worktree, so the smoke test also accepts "unknown" from `ocx version`; the fake build-information tests cover the version text, and the release builds from a regular checkout. The permission probes run in about a second, so `make check` stays fast with them in a Go test. ADR 0008 replaces 0007.

@@ -587,6 +587,13 @@ func checkOwnWriting(root string) Result {
 	for _, dir := range []string{"cmd", "internal"} {
 		visit(dir, map[string]bool{".go": true}, goCode)
 	}
+	if top, err := filepath.Glob(filepath.Join(root, "*.go")); err == nil {
+		for _, path := range top {
+			if data, err := os.ReadFile(path); err == nil {
+				goCode(filepath.Base(path), data)
+			}
+		}
+	}
 	return result("writing rules (this repository)", problems)
 }
 
