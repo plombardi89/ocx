@@ -2,7 +2,6 @@ package doctor
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -89,69 +88,6 @@ func TestCheckHook(t *testing.T) {
 	}
 	if r := checkHook(root, repo, ""); r.Status != check.Warn {
 		t.Fatalf("outdated hook: %+v", r)
-	}
-}
-
-func TestCredentialHelperThatCantRun(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-	repo := t.TempDir()
-	if out, err := exec.Command("git", "-C", repo, "init", "-q").CombinedOutput(); err != nil {
-		t.Fatal(string(out))
-	}
-	// Bytes that aren't a program this machine can run, like a Windows
-	// executable seen from WSL.
-	fake := filepath.Join(t.TempDir(), "My Tools", "git-credential-manager.exe")
-	if err := os.MkdirAll(filepath.Dir(fake), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(fake, []byte("MZ\x90\x00not a linux binary"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	escaped := strings.ReplaceAll(fake, " ", `\ `)
-	if out, err := exec.Command("git", "-C", repo, "config", "credential.helper", escaped).CombinedOutput(); err != nil {
-		t.Fatal(string(out))
-	}
-	r := checkCredentialHelper(repo)
-	if r.Status != check.Warn || !strings.Contains(strings.Join(r.Details, " "), "gh auth setup-git") {
-		t.Fatalf("broken helper: %+v", r)
-	}
-
-	if out, err := exec.Command("git", "-C", repo, "config", "credential.helper", "!gh auth git-credential").CombinedOutput(); err != nil {
-		t.Fatal(string(out))
-	}
-	if r := checkCredentialHelper(repo); r.Status != check.Pass {
-		t.Fatalf("gh helper: %+v", r)
-	}
-}
-
-func TestGitsOwnCredentialHelpersPass(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-	repo := t.TempDir()
-	if out, err := exec.Command("git", "-C", repo, "init", "-q").CombinedOutput(); err != nil {
-		t.Fatal(string(out))
-	}
-	execPath, err := exec.Command("git", "--exec-path").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	store := filepath.Join(strings.TrimSpace(string(execPath)), "git-credential-store")
-	if _, err := os.Stat(store); err != nil {
-		t.Skipf("this git has no credential store helper: %v", err)
-	}
-	for _, helper := range []string{"store", "cache --timeout=3600", store, store + " --file /dev/null"} {
-		if out, err := exec.Command("git", "-C", repo, "config", "credential.helper", helper).CombinedOutput(); err != nil {
-			t.Fatal(string(out))
-		}
-		if r := checkCredentialHelper(repo); r.Status != check.Pass {
-			t.Errorf("helper %q: %+v", helper, r)
-		}
-	}
-
-	if out, err := exec.Command("git", "-C", repo, "config", "credential.helper", "ocx-no-such-helper").CombinedOutput(); err != nil {
-		t.Fatal(string(out))
-	}
-	if r := checkCredentialHelper(repo); r.Status != check.Warn || !strings.Contains(strings.Join(r.Details, " "), "not installed") {
-		t.Fatalf("missing helper: %+v", r)
 	}
 }
 

@@ -217,6 +217,40 @@ probes:
   - { agent: build, action: subagent, resource: general, expect: deny }
   - { agent: build, action: external_directory, resource: "/etc/*", expect: ask }
 
+  # every agent: never reach into the Windows C: drive from a project
+  # elsewhere. Any shell command containing /mnt/c is blocked, lookalikes
+  # such as /mnt/cache too; lookalike directories for the file tools still
+  # only ask. Shell probes are single commands, because OpenCode splits
+  # compound commands and checks each part.
+  - { agent: build, action: external_directory, resource: "/mnt/c/*", expect: deny }
+  - { agent: build, action: external_directory, resource: "/mnt/c", expect: deny }
+  - { agent: build, action: external_directory, resource: "/mnt/c/Program Files/Git/etc/*", expect: deny }
+  - { agent: build, action: external_directory, resource: "/mnt/cache/*", expect: ask }
+  - { agent: plan, action: external_directory, resource: "/mnt/c/Users/phil/*", expect: deny }
+  - { agent: explore, action: external_directory, resource: "/mnt/c/Users/phil/*", expect: deny }
+  - { agent: general, action: external_directory, resource: "/mnt/c/Users/phil/*", expect: deny }
+  - { agent: build, action: shell, resource: "ls /mnt/c", expect: deny }
+  - { agent: build, action: shell, resource: "cat /mnt/c/Windows/win.ini", expect: deny }
+  - { agent: build, action: shell, resource: "ls \"/mnt/c/Program Files\"", expect: deny }
+  - { agent: build, action: shell, resource: "/mnt/c/Windows/System32/cmd.exe /c ver", expect: deny }
+  - { agent: build, action: shell, resource: "cp notes.txt /mnt/c/Users/phil/", expect: deny }
+  - { agent: build, action: shell, resource: "ls \"/mnt/c\"", expect: deny }
+  - { agent: build, action: shell, resource: "ls '/mnt/c'", expect: deny }
+  - { agent: build, action: shell, resource: "find \"/mnt/c\" -name notes.txt", expect: deny }
+  - { agent: build, action: shell, resource: "ls /mnt/c\t-l", expect: deny }
+  - { agent: build, action: shell, resource: "git config --get --file /mnt/c/Users/phil/.gitconfig user.name", expect: deny }
+  - { agent: build, action: shell, resource: "git config --list --file /mnt/c/Users/phil/.gitconfig", expect: deny }
+  - { agent: plan, action: shell, resource: "ls /mnt/c/Users", expect: deny }
+  - { agent: explore, action: shell, resource: "ls /mnt/c/Users", expect: deny }
+  - { agent: general, action: shell, resource: "ls /mnt/c/Users", expect: deny }
+  - { agent: build, action: shell, resource: "ls /mnt/c>files.txt", expect: deny }
+  - { agent: build, action: shell, resource: "ls /mnt/c> /dev/null", expect: deny }
+  - { agent: build, action: shell, resource: "wc -l </mnt/c/Windows/win.ini", expect: deny }
+  - { agent: build, action: shell, resource: "ls /mnt/cache", expect: deny }
+  - { agent: build, action: shell, resource: "git commit -m \"fix: block /mnt/c\"", expect: deny }
+  - { agent: build, action: shell, resource: "git commit -F - <<'MSG'\nKeep agents out of /mnt/c/Users.\nMSG", expect: deny }
+  - { agent: build, action: shell, resource: "git commit -F commit-msg.txt", expect: allow }
+
   # other built-ins: no pushing, committing, or verdict notes
   - { agent: plan, action: shell, resource: "git push -u origin feat/x", expect: deny }
   - { agent: plan, action: shell, resource: "git commit -m x", expect: deny }

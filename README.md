@@ -271,7 +271,7 @@ Sonnet is the same family as the Opus driver. The comparison rules only prefer a
 
 - **Baseline (all agents):** shell asks by default; read-only git and build/test/lint commands are pre-approved; committing and pushing are denied (build re-allows them); review notes are read-only; `.env`/keys denied; `.git/` uneditable; outside directories ask; only `explore`, `plan-critic`, `reviewer`, `debugger`, `consultant`, and `test-writer` can be launched as subagents.
 - **Custom agents** start with a deny-all rule and allowlist what they need. `make check` enforces this; that only the reviewer (`/tmp/opencode/reviews/`), the debugger (`/tmp/opencode/debug/`), and the test-writer (`/tmp/opencode/tests/`) write files, each only in its own scratch root; and that their shell allowlists stay within the read-only baseline. The reviewer's exceptions are its verdict note, scratch worktrees (`git worktree add --detach|remove --force` under the scratch root, path traversal denied), `go run`, and scripts inside its scratch worktree.
-- **Policies** hard-deny what must never happen regardless of approvals: pushes to main/master, force pushes, `--no-verify`, ref deletion, git global options and environment variables that retarget commands (`git -c`, `git -C`, `--git-dir`, `GIT_DIR`, `GIT_CONFIG_*`), `git config` writes, `git update-ref`, touching hooks, `gh pr merge|review|ready`, `gh api`, `sudo`, publishing.
+- **Policies** hard-deny what must never happen regardless of approvals: pushes to main/master, force pushes, `--no-verify`, ref deletion, git global options and environment variables that retarget commands (`git -c`, `git -C`, `--git-dir`, `GIT_DIR`, `GIT_CONFIG_*`), `git config` writes, `git update-ref`, touching hooks, `gh pr merge|review|ready`, `gh api`, `sudo`, publishing, and reaching into the Windows C: drive (`/mnt/c`) from a project elsewhere: the file tools there, `cd` into it, a shell working directory in it, and any shell command containing `/mnt/c`, including lookalikes such as `/mnt/cache`. A project opened on the C: drive itself isn't blocked: OpenCode checks paths inside a project relative to it, so the file tools and shell commands with relative paths work there.
 
 ## Using it
 
@@ -294,7 +294,7 @@ Sonnet is the same family as the Opus driver. The comparison rules only prefer a
 
 1. Every link is in place and points into this checkout.
 2. OpenCode, started in an empty project, loads every agent with its pinned model and a non-empty prompt, and all permission probes pass against the installed configuration. A missing `prompts` link otherwise fails silently: OpenCode loads the agents with empty prompts. Doctor also fails if any other configuration file OpenCode loads, such as a system-wide one, sets policies, because the probes can't account for how those combine with ocx's.
-3. The tools agents rely on: a working `gh` login, `gcc` for the race detector, `shellcheck`, and a git credential helper that can actually run.
+3. The tools agents rely on: a working `gh` login, `gcc` for the race detector, and `shellcheck`.
 4. For each repository: the pre-push hook is installed and current, and there's an `AGENTS.md`. When the origin is on GitHub, doctor also warns if the default branch isn't protected.
 
 ### Reviewing without installing
