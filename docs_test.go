@@ -30,7 +30,7 @@ func paragraphs(text string) []string {
 			current = nil
 		}
 	}
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		switch {
 		case strings.TrimSpace(line) == "":
 			flush()
@@ -104,11 +104,11 @@ func TestTheCodeOnlyTheRemovedCommandsUsedIsGone(t *testing.T) {
 }
 
 func TestTheOcxBinaryDoesNotLinkTheCheckOrEvalCode(t *testing.T) {
-	out, err := exec.Command("go", "list", "-deps", "./cmd/ocx").Output()
+	out, err := exec.CommandContext(t.Context(), "go", "list", "-deps", "./cmd/ocx").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, pkg := range strings.Fields(string(out)) {
+	for pkg := range strings.FieldsSeq(string(out)) {
 		for _, banned := range []string{"internal/check", "internal/eval", "internal/install", "internal/doctor"} {
 			if strings.HasSuffix(pkg, banned) {
 				t.Errorf("the ocx binary still includes %s", pkg)

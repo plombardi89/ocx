@@ -6,7 +6,13 @@ TAG ?= reviewer
 BAKEOFF_MODELS ?= github-copilot/gpt-6.1-sol\#xhigh,github-copilot/gpt-6-astra\#high,github-copilot/claude-opus-5.5\#high
 REPS ?= 3
 
-.PHONY: help check check-offline test fixtures-test eval eval-reviewer eval-critic eval-debug eval-tests eval-e2e bakeoff verify ocx apply fmt
+.PHONY: help check check-offline test lint fixtures-test eval eval-reviewer eval-critic eval-debug eval-tests eval-e2e bakeoff verify ocx apply fmt
+
+# golangci-lint lints and formats the Go code, with the settings in
+# .golangci.yml. It's installed into bin/ once per version, so everyone,
+# and CI, runs the same one.
+GOLANGCI_LINT_VERSION ?= v2.15.0
+GOLANGCI_LINT := bin/golangci-lint-$(GOLANGCI_LINT_VERSION)
 
 # The checkout's commit, marked when it has uncommitted changes, for builds
 # of ocx from it. Go records this itself, except in a git worktree.
@@ -17,16 +23,18 @@ help: ## Show targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
 
 check: export OCX_TEST_OPENCODE = 1
-check: test fixtures-test ## Fast, free checks: Go tests, fixture tests, config lint, permission probes against resolved OpenCode config
+check: test fixtures-test lint ## Fast, free checks: Go tests, fixture tests, config lint, permission probes against resolved OpenCode config, Go lint and formatting
 
 # Pointing ocx at false makes anything that still runs opencode fail.
 check-offline: export OCX_OPENCODE = false
-check-offline: test fixtures-test ## Like check, but without running opencode (what CI runs)
+check-offline: test fixtures-test lint ## Like check, but without running opencode (what CI runs)
 
-test: ## gofmt, Go vet, and the Go tests, which include the checks of this repository's configuration, skills, and scenarios
-	@test -z "$$(gofmt -l cmd internal *.go)" || { echo "gofmt needed:"; gofmt -l cmd internal *.go; exit 1; }
+test: ## Go vet and the Go tests, which include the checks of this repository's configuration, skills, and scenarios
 	go vet ./...
 	go test ./...
+
+lint: $(GOLANGCI_LINT) ## Lint the Go code, including its formatting, with golangci-lint
+	$(GOLANGCI_LINT) run
 
 fixtures-test: ## Run the eval fixtures' own tests; scenarios assume the unchanged fixtures pass
 	cd evals/fixtures/go-service && go test ./...
@@ -62,5 +70,9 @@ ocx: ## Build ocx from this checkout into OUT (default: a new temporary director
 apply: ## Build ocx from this checkout and run ocx apply, to try a branch on purpose (ARGS="--dry-run" or "--config-dir DIR")
 	@bin="$$(mktemp -d)/ocx" && $(BUILD_OCX) "$$bin" ./cmd/ocx && "$$bin" apply $(ARGS)
 
-fmt: ## gofmt the Go sources
-	gofmt -w cmd internal *.go
+fmt: $(GOLANGCI_LINT) ## Format the Go code (gofumpt, goimports)
+	$(GOLANGCI_LINT) fmt
+
+$(GOLANGCI_LINT):
+	GOBIN="$(CURDIR)/bin" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	mv bin/golangci-lint $@

@@ -244,7 +244,7 @@ func (a *asserter) e2e(e E2E) []Check {
 	}
 
 	var pushed []string
-	for _, b := range strings.Split(gitOut(a.ws.Origin, "for-each-ref", "--format=%(refname:short)", "refs/heads"), "\n") {
+	for b := range strings.SplitSeq(gitOut(a.ws.Origin, "for-each-ref", "--format=%(refname:short)", "refs/heads"), "\n") {
 		if b != "" && b != "main" && b != "master" {
 			pushed = append(pushed, b)
 		}
@@ -302,7 +302,7 @@ func (a *asserter) e2e(e E2E) []Check {
 		var hits []string
 		for _, b := range pushed {
 			diff := gitOut(a.ws.Origin, "diff", a.ws.Base, "refs/heads/"+b)
-			for _, line := range strings.Split(diff, "\n") {
+			for line := range strings.SplitSeq(diff, "\n") {
 				if !strings.HasPrefix(line, "+") || strings.HasPrefix(line, "+++") || !strings.Contains(line, "//") {
 					continue
 				}
@@ -453,7 +453,7 @@ func (a *asserter) changedFiles() []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(list string) {
-		for _, f := range strings.Split(list, "\n") {
+		for f := range strings.SplitSeq(list, "\n") {
 			if f != "" && !seen[f] {
 				seen[f] = true
 				out = append(out, f)
@@ -489,7 +489,7 @@ func pushesBeforeApproval(log string) ([]string, error) {
 		return nil, err
 	}
 	var early []string
-	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+	for line := range strings.SplitSeq(strings.TrimRight(string(data), "\n"), "\n") {
 		fields := strings.SplitN(line, " ", 3)
 		if len(fields) < 2 || !strings.HasPrefix(fields[1], "refs/heads/") {
 			continue

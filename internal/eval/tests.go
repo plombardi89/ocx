@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -125,7 +126,7 @@ func fencedBlock(lines []string, start int) (string, int, error) {
 func PlanCriteria(plan string) []int {
 	var nums []int
 	in := false
-	for _, line := range strings.Split(plan, "\n") {
+	for line := range strings.SplitSeq(plan, "\n") {
 		if h, found := strings.CutPrefix(line, "## "); found {
 			in = strings.EqualFold(strings.TrimSpace(h), "Acceptance criteria")
 			continue
@@ -339,12 +340,7 @@ func checkTestsReport(ws *Workspace, final string, e TestsExpect) []Check {
 }
 
 func containsInt(list []int, n int) bool {
-	for _, x := range list {
-		if x == n {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, n)
 }
 
 func gitShow(dir, rev, p string) (string, error) {

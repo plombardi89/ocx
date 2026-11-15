@@ -140,12 +140,12 @@ func TestApplyTwiceLeavesTheSameFiles(t *testing.T) {
 func TestApplyAcceptsAConfigDirThatIsALinkAndKeepsTheLink(t *testing.T) {
 	s := newSandbox(t)
 	base := t.TempDir()
-	real := filepath.Join(base, "real")
-	if err := os.MkdirAll(real, 0o755); err != nil {
+	resolved := filepath.Join(base, "resolved")
+	if err := os.MkdirAll(resolved, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	link := filepath.Join(base, "link")
-	makeLink(t, real, link)
+	makeLink(t, resolved, link)
 
 	if r := s.apply(link); r.Code != 0 {
 		t.Fatalf("apply through a linked configuration directory exited %d: %s", r.Code, r.shown())
@@ -154,7 +154,7 @@ func TestApplyAcceptsAConfigDirThatIsALinkAndKeepsTheLink(t *testing.T) {
 		t.Errorf("the configuration directory is no longer a link: %v", err)
 	}
 	for rel := range shippedFiles(t) {
-		fi, err := os.Lstat(filepath.Join(real, filepath.FromSlash(rel)))
+		fi, err := os.Lstat(filepath.Join(resolved, filepath.FromSlash(rel)))
 		if err != nil || !fi.Mode().IsRegular() {
 			t.Errorf("%s was not written as a regular file in the linked directory: %v", rel, err)
 		}
@@ -162,7 +162,7 @@ func TestApplyAcceptsAConfigDirThatIsALinkAndKeepsTheLink(t *testing.T) {
 	if r := s.remove(link); r.Code != 0 {
 		t.Fatalf("remove through a linked configuration directory exited %d: %s", r.Code, r.shown())
 	}
-	if pathExists(filepath.Join(real, "opencode.jsonc")) || pathExists(filepath.Join(real, ".ocx-files")) {
+	if pathExists(filepath.Join(resolved, "opencode.jsonc")) || pathExists(filepath.Join(resolved, ".ocx-files")) {
 		t.Error("remove left files in the linked directory")
 	}
 }
@@ -329,7 +329,7 @@ func TestDryRunApplyPrintsDeletionsAndChangesNothing(t *testing.T) {
 }
 
 func lineContaining(out, needle string) string {
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if strings.Contains(line, needle) {
 			return line
 		}

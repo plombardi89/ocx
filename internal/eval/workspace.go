@@ -2,6 +2,7 @@ package eval
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -80,7 +81,7 @@ func captureState(work string) repoState {
 			s.Files[p] = fmt.Sprintf("%x", sha256.Sum256(data))
 		}
 	}
-	for _, line := range strings.Split(gitOut(work, "worktree", "list", "--porcelain"), "\n") {
+	for line := range strings.SplitSeq(gitOut(work, "worktree", "list", "--porcelain"), "\n") {
 		if wt, ok := strings.CutPrefix(line, "worktree "); ok {
 			s.Worktrees = append(s.Worktrees, wt)
 		}
@@ -90,7 +91,7 @@ func captureState(work string) repoState {
 
 // gitRaw runs an isolated git command and returns its output untouched.
 func gitRaw(dir string, args ...string) ([]byte, error) {
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(context.Background(), "git", args...)
 	cmd.Dir = dir
 	cmd.Env = gitx.Env()
 	var stderr bytes.Buffer

@@ -140,11 +140,15 @@ func (o Options) download(name string) ([]byte, error) {
 	if limit == 0 {
 		limit = DefaultMaxDownload
 	}
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download %s: %w", url, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download %s: HTTP %s", url, resp.Status)
 	}
@@ -164,7 +168,7 @@ var sumLine = regexp.MustCompile(`^([0-9a-fA-F]{64})  (\S+)$`)
 // sha256sum's format: 64 hexadecimal digits, two spaces, and the name.
 func checksumFor(sums []byte, asset string) (string, error) {
 	var found []string
-	for _, line := range strings.Split(string(sums), "\n") {
+	for line := range strings.SplitSeq(string(sums), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) == 0 || strings.TrimPrefix(fields[len(fields)-1], "*") != asset {
 			continue

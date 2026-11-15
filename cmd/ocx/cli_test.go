@@ -18,7 +18,7 @@ var (
 	builtOnce sync.Once
 	builtDir  string
 	builtPath string
-	builtErr  error
+	errBuild  error
 )
 
 func TestMain(m *testing.M) {
@@ -33,21 +33,21 @@ func TestMain(m *testing.M) {
 func ocxBinary(t *testing.T) string {
 	t.Helper()
 	builtOnce.Do(func() {
-		dir, err := os.MkdirTemp("", "ocx-cli-")
+		dir, err := os.MkdirTemp("", "ocx-cli-") //nolint:usetesting // Built once and shared by every test, so it outlives any one test's TempDir.
 		if err != nil {
-			builtErr = err
+			errBuild = err
 			return
 		}
 		builtDir = dir
 		path := filepath.Join(dir, "ocx")
-		if out, err := exec.Command("go", "build", "-buildvcs=false", "-o", path, ".").CombinedOutput(); err != nil {
-			builtErr = fmt.Errorf("go build: %v\n%s", err, out)
+		if out, err := exec.CommandContext(t.Context(), "go", "build", "-buildvcs=false", "-o", path, ".").CombinedOutput(); err != nil {
+			errBuild = fmt.Errorf("go build: %w\n%s", err, out)
 			return
 		}
 		builtPath = path
 	})
-	if builtErr != nil {
-		t.Fatal(builtErr)
+	if errBuild != nil {
+		t.Fatal(errBuild)
 	}
 	return builtPath
 }
@@ -102,7 +102,7 @@ func (s *sandbox) run(args ...string) cliResult {
 	if bin == "" {
 		bin = ocxBinary(s.t)
 	}
-	cmd := exec.Command(bin, args...)
+	cmd := exec.CommandContext(s.t.Context(), bin, args...)
 	cmd.Dir = s.t.TempDir()
 	cmd.Env = s.env
 	var stdout, stderr bytes.Buffer
@@ -125,9 +125,9 @@ func (s *sandbox) apply(cfg string, flags ...string) cliResult {
 	return s.run(append([]string{"apply", "--config-dir", cfg}, flags...)...)
 }
 
-func (s *sandbox) remove(cfg string, flags ...string) cliResult {
+func (s *sandbox) remove(cfg string) cliResult {
 	s.t.Helper()
-	return s.run(append([]string{"remove", "--config-dir", cfg}, flags...)...)
+	return s.run("remove", "--config-dir", cfg)
 }
 
 // install runs apply and fails the test if it doesn't succeed.
@@ -298,7 +298,7 @@ func shippedPathWithPrefix(t *testing.T, shipped map[string]string, prefix strin
 func listedPaths(t *testing.T, cfg string) []string {
 	t.Helper()
 	var out []string
-	for _, line := range strings.Split(readText(t, filepath.Join(cfg, ".ocx-files")), "\n") {
+	for line := range strings.SplitSeq(readText(t, filepath.Join(cfg, ".ocx-files")), "\n") {
 		if line != "" {
 			out = append(out, line)
 		}

@@ -60,7 +60,7 @@ func updSums(asset string, binary []byte) string {
 func updBuild(t *testing.T, stamp string, env ...string) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "ocx")
-	cmd := exec.Command("go", "build", "-buildvcs=false", "-ldflags", "-X main.commit="+stamp, "-o", bin, ".")
+	cmd := exec.CommandContext(t.Context(), "go", "build", "-buildvcs=false", "-ldflags", "-X main.commit="+stamp, "-o", bin, ".")
 	cmd.Env = append(os.Environ(), env...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
@@ -323,16 +323,16 @@ func TestUpdateOfAnUpToDateBinaryReportsItAndFetchesOnlySHA256SUMS(t *testing.T)
 
 func TestUpdateComparesTheFileALinkPointsTo(t *testing.T) {
 	asset := updMachineAsset(t)
-	real := updInstall(t, updBuild(t, updOlder), 0o755)
+	realPath := updInstall(t, updBuild(t, updOlder), 0o755)
 	linkDir := t.TempDir()
 	link := filepath.Join(linkDir, "ocx")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(realPath, link); err != nil {
 		t.Fatal(err)
 	}
 	s := newUpdServer(t, "")
-	s.serve("SHA256SUMS", []byte(updSums(asset, updReadFile(t, real))))
+	s.serve("SHA256SUMS", []byte(updSums(asset, updReadFile(t, realPath))))
 	s.serve(asset, updVersionScript("must-not-be-installed"))
-	beforeReal, beforeLink := updSnapshot(t, filepath.Dir(real)), updSnapshot(t, linkDir)
+	beforeReal, beforeLink := updSnapshot(t, filepath.Dir(realPath)), updSnapshot(t, linkDir)
 
 	r := updRun(t, link, s.url(), nil, "update")
 
@@ -342,7 +342,7 @@ func TestUpdateComparesTheFileALinkPointsTo(t *testing.T) {
 	if got := s.requested(); !reflect.DeepEqual(got, []string{"/SHA256SUMS"}) {
 		t.Errorf("requests = %v, want only /SHA256SUMS", got)
 	}
-	updNotChanged(t, "the real binary's directory", beforeReal, updSnapshot(t, filepath.Dir(real)))
+	updNotChanged(t, "the real binary's directory", beforeReal, updSnapshot(t, filepath.Dir(realPath)))
 	updNotChanged(t, "the link's directory", beforeLink, updSnapshot(t, linkDir))
 }
 
@@ -405,11 +405,11 @@ func TestUpdateReplacesTheBinaryWithTheReleaseAndSaysSo(t *testing.T) {
 
 func TestUpdateRunThroughALinkReplacesTheLinkedFileAndKeepsTheLink(t *testing.T) {
 	asset := updMachineAsset(t)
-	real := updInstall(t, updBuild(t, updOlder), 0o755)
-	realDir := filepath.Dir(real)
+	realPath := updInstall(t, updBuild(t, updOlder), 0o755)
+	realDir := filepath.Dir(realPath)
 	linkDir := t.TempDir()
 	link := filepath.Join(linkDir, "ocx")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(realPath, link); err != nil {
 		t.Fatal(err)
 	}
 	for _, dir := range []string{realDir, linkDir} {
@@ -426,14 +426,14 @@ func TestUpdateRunThroughALinkReplacesTheLinkedFileAndKeepsTheLink(t *testing.T)
 	if r.code != 0 || !strings.Contains(r.stdout, "Updated ocx from "+updOlder+" to stand-in-2.") {
 		t.Fatalf("update through a link: %s", r)
 	}
-	if got := string(updReadFile(t, real)); got != string(standIn) {
+	if got := string(updReadFile(t, realPath)); got != string(standIn) {
 		t.Errorf("the linked file holds %q, want the release binary", got)
 	}
 	if got := string(updReadFile(t, link)); got != string(standIn) {
 		t.Errorf("reading through the link gives %q, want the release binary", got)
 	}
-	if target, err := os.Readlink(link); err != nil || target != real {
-		t.Errorf("the link points to %q, %v; want %q", target, err, real)
+	if target, err := os.Readlink(link); err != nil || target != realPath {
+		t.Errorf("the link points to %q, %v; want %q", target, err, realPath)
 	}
 	for _, dir := range []string{realDir, linkDir} {
 		snap := updSnapshot(t, dir)
@@ -496,7 +496,7 @@ func TestUpdateFailuresExitWithStatus1AndLeaveTheBinaryAlone(t *testing.T) {
 			s.serve("SHA256SUMS", []byte(updSums(asset, good)))
 			s.serve(asset, append(append([]byte(nil), good...), "# tampered\n"...))
 		}},
-		sumsCase("SHA256SUMS has no line for the binary", func(good []byte) string {
+		sumsCase("SHA256SUMS has no line for the binary", func(_ []byte) string {
 			return updHex([]byte("unrelated")) + "  ocx-linux-other\n"
 		}),
 		sumsCase("SHA256SUMS has two lines for the binary", func(good []byte) string {
@@ -722,7 +722,7 @@ func TestUpdateCheckExitsWith1OnlyWhenTheCheckFails(t *testing.T) {
 		setup       func(s *updServer)
 	}{
 		{name: "the release can't be reached", unreachable: true},
-		{name: "SHA256SUMS is not found", setup: func(s *updServer) {}},
+		{name: "SHA256SUMS is not found", setup: func(_ *updServer) {}},
 		{name: "SHA256SUMS has no line for the binary", setup: func(s *updServer) {
 			s.serve("SHA256SUMS", []byte(updHex([]byte("x"))+"  ocx-linux-other\n"))
 		}},
@@ -794,7 +794,7 @@ func TestUpdateOnASystemWithoutAReleaseExitsWith1NamingItAndDownloadsNothing(t *
 		t.Skip("this test runs a linux/386 build, which needs a linux/amd64 machine")
 	}
 	bin := updBuild(t, updOlder, "GOOS=linux", "GOARCH=386", "CGO_ENABLED=0")
-	if out, err := exec.Command(bin, "version").CombinedOutput(); err != nil {
+	if out, err := exec.CommandContext(t.Context(), bin, "version").CombinedOutput(); err != nil {
 		t.Skipf("this machine can't run a linux/386 binary: %v %s", err, out)
 	}
 	installed := updInstall(t, bin, 0o755)
@@ -862,8 +862,11 @@ func TestUpdateApplyRunsTheNewBinarysApplyAndPassesItsResultThrough(t *testing.T
 		args []string
 		want [][]string
 	}{
-		{"with a configuration directory", []string{"update", "--apply", "--config-dir", cfg},
-			[][]string{{"apply", "--config-dir", cfg}, {"apply", "--config-dir=" + cfg}}},
+		{
+			"with a configuration directory",
+			[]string{"update", "--apply", "--config-dir", cfg},
+			[][]string{{"apply", "--config-dir", cfg}, {"apply", "--config-dir=" + cfg}},
+		},
 		{"without one", []string{"update", "--apply"}, [][]string{{"apply"}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {

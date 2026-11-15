@@ -145,8 +145,10 @@ internal/                 the apply and update packages, the checks, and the eva
 
 | Target | What it does | Cost |
 | --- | --- | --- |
-| `make test` | gofmt, vet, and the Go tests, which include config/skill/command lint, scenario validation, and writing-rule lint | free, ~seconds |
-| `make check` | `make test` with permission probes against OpenCode's resolved config, plus the fixtures' own tests | free, ~seconds |
+| `make test` | vet and the Go tests, which include config/skill/command lint, scenario validation, and writing-rule lint | free, ~seconds |
+| `make lint` | golangci-lint, with the linters and formatters (gofumpt, goimports) set in `.golangci.yml`; installs the pinned version into `bin/` the first time | free, ~seconds |
+| `make fmt` | Format the Go code with the same formatters | free |
+| `make check` | `make test` with permission probes against OpenCode's resolved config, plus the fixtures' own tests and `make lint` | free, ~seconds |
 | `make check-offline` | Same without running OpenCode; CI runs this on every pull request | free |
 | `make fixtures-test` | The eval fixtures' own tests, which every scenario assumes pass before it adds its changes | free |
 | `make eval-reviewer` | Reviewer scenarios with the pinned reviewer model | tokens |

@@ -154,17 +154,17 @@ func resolve(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	real, err := filepath.EvalSymlinks(abs)
+	resolved, err := filepath.EvalSymlinks(abs)
 	if errors.Is(err, fs.ErrNotExist) {
 		return abs, nil
 	}
 	if err != nil {
 		return "", err
 	}
-	if fi, err := os.Stat(real); err != nil || !fi.IsDir() {
+	if fi, err := os.Stat(resolved); err != nil || !fi.IsDir() {
 		return "", fmt.Errorf("%s is not a directory", dir)
 	}
-	return real, nil
+	return resolved, nil
 }
 
 // readList returns the entries of root's ListFile, and whether it exists. An
@@ -178,7 +178,7 @@ func readList(root string) ([]string, bool, error) {
 		return nil, false, err
 	}
 	var entries []string
-	for _, e := range strings.Split(string(data), "\n") {
+	for e := range strings.SplitSeq(string(data), "\n") {
 		if e == "" {
 			continue
 		}

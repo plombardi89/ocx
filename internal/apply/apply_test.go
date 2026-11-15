@@ -3,6 +3,7 @@ package apply
 import (
 	"errors"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,9 +23,7 @@ var v1 = map[string][]byte{
 
 func without(files map[string][]byte, drop ...string) map[string][]byte {
 	out := map[string][]byte{}
-	for k, v := range files {
-		out[k] = v
-	}
+	maps.Copy(out, files)
 	for _, d := range drop {
 		delete(out, d)
 	}
@@ -211,11 +210,13 @@ func TestRefusesWhatsInTheWayBeforeChangingAnything(t *testing.T) {
 		want  string
 	}{
 		{"a link at a file it writes", func(t *testing.T, dir, outside string) {
+			t.Helper()
 			if err := os.Symlink(filepath.Join(outside, "keep.md"), filepath.Join(dir, "AGENTS.md")); err != nil {
 				t.Fatal(err)
 			}
 		}, "AGENTS.md is a link"},
 		{"a link at a directory it writes into", func(t *testing.T, dir, outside string) {
+			t.Helper()
 			if err := os.MkdirAll(filepath.Join(dir, "skills"), 0o755); err != nil {
 				t.Fatal(err)
 			}
@@ -223,12 +224,14 @@ func TestRefusesWhatsInTheWayBeforeChangingAnything(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, "skills/new is a link"},
-		{"a directory where a file goes", func(t *testing.T, dir, outside string) {
+		{"a directory where a file goes", func(t *testing.T, dir, _ string) {
+			t.Helper()
 			if err := os.MkdirAll(filepath.Join(dir, "opencode.jsonc"), 0o755); err != nil {
 				t.Fatal(err)
 			}
 		}, "opencode.jsonc is a directory"},
-		{"a file where a directory goes", func(t *testing.T, dir, outside string) {
+		{"a file where a directory goes", func(t *testing.T, dir, _ string) {
+			t.Helper()
 			if err := os.WriteFile(filepath.Join(dir, "prompts"), []byte("x"), 0o644); err != nil {
 				t.Fatal(err)
 			}
@@ -388,6 +391,7 @@ func TestTheListAndItsTemporaryFileFollowTheSameRules(t *testing.T) {
 		want  string
 	}{
 		{"a link at the list", func(t *testing.T, dir, outside string) {
+			t.Helper()
 			if err := os.Remove(filepath.Join(dir, ListFile)); err != nil {
 				t.Fatal(err)
 			}
@@ -396,11 +400,13 @@ func TestTheListAndItsTemporaryFileFollowTheSameRules(t *testing.T) {
 			}
 		}, []string{"apply", "remove"}, ListFile + " is a link"},
 		{"a link at the temporary list", func(t *testing.T, dir, outside string) {
+			t.Helper()
 			if err := os.Symlink(filepath.Join(outside, "keep.md"), filepath.Join(dir, listTemp)); err != nil {
 				t.Fatal(err)
 			}
 		}, []string{"apply", "remove"}, listTemp + " is a link"},
-		{"a directory at the temporary list", func(t *testing.T, dir, outside string) {
+		{"a directory at the temporary list", func(t *testing.T, dir, _ string) {
+			t.Helper()
 			if err := os.Mkdir(filepath.Join(dir, listTemp), 0o755); err != nil {
 				t.Fatal(err)
 			}

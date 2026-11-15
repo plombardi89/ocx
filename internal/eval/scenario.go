@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -230,12 +231,7 @@ func (s Scenario) TimeoutDuration() time.Duration {
 
 // HasTag reports whether the scenario carries tag.
 func (s Scenario) HasTag(tag string) bool {
-	for _, t := range s.Tags {
-		if t == tag {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s.Tags, tag)
 }
 
 // LoadScenarios reads every scenario under evals/scenarios.

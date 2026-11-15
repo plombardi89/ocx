@@ -47,34 +47,41 @@ func TestApplyRefusesWhatIsInTheWayBeforeChangingAnything(t *testing.T) {
 		name  string
 		setup obstacleSetup
 	}{
-		{"a link at a file it writes", func(t *testing.T, s *sandbox, cfg string, out outsideFiles) string {
+		{"a link at a file it writes", func(t *testing.T, _ *sandbox, cfg string, out outsideFiles) string {
+			t.Helper()
 			makeLink(t, out.file, filepath.Join(cfg, "AGENTS.md"))
 			return "AGENTS.md"
 		}},
-		{"a link at a file it writes that points nowhere", func(t *testing.T, s *sandbox, cfg string, out outsideFiles) string {
+		{"a link at a file it writes that points nowhere", func(t *testing.T, _ *sandbox, cfg string, out outsideFiles) string {
+			t.Helper()
 			rel := shippedPathWithPrefix(t, shippedFiles(t), "prompts/")
 			makeLink(t, out.missing, filepath.Join(cfg, filepath.FromSlash(rel)))
 			return rel
 		}},
-		{"a link at a directory it writes into", func(t *testing.T, s *sandbox, cfg string, out outsideFiles) string {
+		{"a link at a directory it writes into", func(t *testing.T, _ *sandbox, cfg string, out outsideFiles) string {
+			t.Helper()
 			makeLink(t, out.dir, filepath.Join(cfg, "skills"))
 			return "skills"
 		}},
-		{"a link at a nested directory it writes into", func(t *testing.T, s *sandbox, cfg string, out outsideFiles) string {
+		{"a link at a nested directory it writes into", func(t *testing.T, _ *sandbox, cfg string, out outsideFiles) string {
+			t.Helper()
 			dir := shippedSkillDir(t)
 			makeLink(t, out.dir, filepath.Join(cfg, filepath.FromSlash(dir)))
 			return dir
 		}},
-		{"a directory where a file goes", func(t *testing.T, s *sandbox, cfg string, out outsideFiles) string {
+		{"a directory where a file goes", func(t *testing.T, _ *sandbox, cfg string, _ outsideFiles) string {
+			t.Helper()
 			writeText(t, filepath.Join(cfg, "opencode.jsonc", "inner.txt"), "inside\n")
 			return "opencode.jsonc"
 		}},
-		{"a directory where a nested file goes", func(t *testing.T, s *sandbox, cfg string, out outsideFiles) string {
+		{"a directory where a nested file goes", func(t *testing.T, _ *sandbox, cfg string, _ outsideFiles) string {
+			t.Helper()
 			rel := shippedPathWithPrefix(t, shippedFiles(t), "commands/")
 			writeText(t, filepath.Join(cfg, filepath.FromSlash(rel), "inner.txt"), "inside\n")
 			return rel
 		}},
 		{"a link at a listed file it would delete", func(t *testing.T, s *sandbox, cfg string, out outsideFiles) string {
+			t.Helper()
 			s.install(cfg)
 			writeText(t, filepath.Join(cfg, "AGENTS.md"), "edited by hand\n")
 			makeLink(t, out.file, filepath.Join(cfg, "commands", "retired.md"))
@@ -82,6 +89,7 @@ func TestApplyRefusesWhatIsInTheWayBeforeChangingAnything(t *testing.T) {
 			return "commands/retired.md"
 		}},
 		{"a link at a directory above a listed file it would delete", func(t *testing.T, s *sandbox, cfg string, out outsideFiles) string {
+			t.Helper()
 			s.install(cfg)
 			writeText(t, filepath.Join(cfg, "AGENTS.md"), "edited by hand\n")
 			makeLink(t, out.dir, filepath.Join(cfg, "skills", "retired"))
@@ -115,24 +123,28 @@ func TestRemoveRefusesLinksBeforeDeletingAnything(t *testing.T) {
 		name  string
 		setup obstacleSetup
 	}{
-		{"a link at a listed file", func(t *testing.T, s *sandbox, cfg string, out outsideFiles) string {
+		{"a link at a listed file", func(t *testing.T, _ *sandbox, cfg string, out outsideFiles) string {
+			t.Helper()
 			removeTree(t, filepath.Join(cfg, "AGENTS.md"))
 			makeLink(t, out.file, filepath.Join(cfg, "AGENTS.md"))
 			return "AGENTS.md"
 		}},
-		{"a link at a nested listed file", func(t *testing.T, s *sandbox, cfg string, out outsideFiles) string {
+		{"a link at a nested listed file", func(t *testing.T, _ *sandbox, cfg string, out outsideFiles) string {
+			t.Helper()
 			rel := shippedPathWithPrefix(t, shippedFiles(t), "commands/")
 			removeTree(t, filepath.Join(cfg, filepath.FromSlash(rel)))
 			makeLink(t, out.file, filepath.Join(cfg, filepath.FromSlash(rel)))
 			return rel
 		}},
-		{"a link at a directory above a listed file", func(t *testing.T, s *sandbox, cfg string, out outsideFiles) string {
+		{"a link at a directory above a listed file", func(t *testing.T, _ *sandbox, cfg string, out outsideFiles) string {
+			t.Helper()
 			dir := shippedSkillDir(t)
 			removeTree(t, filepath.Join(cfg, filepath.FromSlash(dir)))
 			makeLink(t, out.dir, filepath.Join(cfg, filepath.FromSlash(dir)))
 			return dir
 		}},
-		{"a link at a top-level directory above listed files", func(t *testing.T, s *sandbox, cfg string, out outsideFiles) string {
+		{"a link at a top-level directory above listed files", func(t *testing.T, _ *sandbox, cfg string, out outsideFiles) string {
+			t.Helper()
 			removeTree(t, filepath.Join(cfg, "skills"))
 			makeLink(t, out.dir, filepath.Join(cfg, "skills"))
 			return "skills"
@@ -165,14 +177,14 @@ func TestInvalidListEntriesAreRefusedBeforeAnythingChanges(t *testing.T) {
 		name  string
 		entry func(cfg, outsideFile string) string
 	}{
-		{"parent directory", func(cfg, outside string) string { return "../keep.md" }},
-		{"parent directory in the middle", func(cfg, outside string) string { return "skills/../../keep.md" }},
-		{"parent directory that stays inside", func(cfg, outside string) string { return "skills/../mine.md" }},
-		{"only the parent directory", func(cfg, outside string) string { return ".." }},
-		{"absolute path outside", func(cfg, outside string) string { return outside }},
-		{"absolute path of the configuration directory", func(cfg, outside string) string { return cfg }},
-		{"the configuration directory itself", func(cfg, outside string) string { return "." }},
-		{"the configuration directory itself with a slash", func(cfg, outside string) string { return "./" }},
+		{"parent directory", func(_, _ string) string { return "../keep.md" }},
+		{"parent directory in the middle", func(_, _ string) string { return "skills/../../keep.md" }},
+		{"parent directory that stays inside", func(_, _ string) string { return "skills/../mine.md" }},
+		{"only the parent directory", func(_, _ string) string { return ".." }},
+		{"absolute path outside", func(_, outside string) string { return outside }},
+		{"absolute path of the configuration directory", func(cfg, _ string) string { return cfg }},
+		{"the configuration directory itself", func(_, _ string) string { return "." }},
+		{"the configuration directory itself with a slash", func(_, _ string) string { return "./" }},
 	}
 	for _, op := range []string{"apply", "remove"} {
 		for _, e := range entries {

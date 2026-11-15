@@ -154,9 +154,7 @@ func Run(opts Options) ([]Result, error) {
 	sem := make(chan struct{}, opts.Parallel)
 	var wg sync.WaitGroup
 	for i, j := range jobs {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			model := expectedModel(cfg, j.scenario.Agent, j.override)
@@ -164,7 +162,7 @@ func Run(opts Options) ([]Result, error) {
 			r := runOne(opts, cfg, j)
 			opts.Log("%-6s %s  %s  #%d  %s  %s", r.Status, r.Scenario, r.Model, r.Rep, time.Duration(r.DurationSec*float64(time.Second)).Round(time.Second), failedChecks(r))
 			results[i] = r
-		}()
+		})
 	}
 	wg.Wait()
 

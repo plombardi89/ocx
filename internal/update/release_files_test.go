@@ -72,11 +72,12 @@ func (s *relServer) hits(path string) int {
 	return n
 }
 
-// relBinaryIn writes a running binary called ocx into a new directory.
-func relBinaryIn(t *testing.T, content string, mode os.FileMode) string {
+// relBinaryIn writes relRunning as a running binary called ocx into a new
+// directory.
+func relBinaryIn(t *testing.T, mode os.FileMode) string {
 	t.Helper()
 	exe := filepath.Join(t.TempDir(), "ocx")
-	if err := os.WriteFile(exe, []byte(content), mode); err != nil {
+	if err := os.WriteFile(exe, []byte(relRunning), mode); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(exe, mode); err != nil {
@@ -128,7 +129,7 @@ func TestRunFetchesTheFilesNamedByTheLocationAndTheMachine(t *testing.T) {
 			s.put("/mirror/ocx/SHA256SUMS", relLine("ocx-linux-arm64", arm)+relLine("ocx-linux-amd64", amd))
 			s.put("/mirror/ocx/ocx-linux-amd64", amd)
 			s.put("/mirror/ocx/ocx-linux-arm64", arm)
-			exe := relBinaryIn(t, relRunning, 0o755)
+			exe := relBinaryIn(t, 0o755)
 			opts := Options{Location: Location(s.srv.URL + "/mirror/ocx/"), Executable: exe, GOOS: "linux", GOARCH: arch}
 			if _, err := Run(opts, false); err != nil {
 				t.Fatal(err)
@@ -165,8 +166,13 @@ func TestLocationIgnoresATrailingSlash(t *testing.T) {
 
 func TestSystemsWithoutAReleaseFailNamingTheSystemAndDownloadNothing(t *testing.T) {
 	systems := [][2]string{
-		{"darwin", "arm64"}, {"darwin", "amd64"}, {"windows", "amd64"},
-		{"freebsd", "amd64"}, {"linux", "386"}, {"linux", "riscv64"}, {"linux", "arm"},
+		{"darwin", "arm64"},
+		{"darwin", "amd64"},
+		{"windows", "amd64"},
+		{"freebsd", "amd64"},
+		{"linux", "386"},
+		{"linux", "riscv64"},
+		{"linux", "arm"},
 	}
 	for _, sys := range systems {
 		for _, check := range []bool{false, true} {
@@ -179,7 +185,7 @@ func TestSystemsWithoutAReleaseFailNamingTheSystemAndDownloadNothing(t *testing.
 				s.put("/SHA256SUMS", relLine("ocx-linux-amd64", "a")+relLine("ocx-linux-arm64", "b"))
 				s.put("/ocx-linux-amd64", "a")
 				s.put("/ocx-linux-arm64", "b")
-				exe := relBinaryIn(t, relRunning, 0o755)
+				exe := relBinaryIn(t, 0o755)
 				_, err := Run(Options{Location: s.srv.URL, Executable: exe, GOOS: sys[0], GOARCH: sys[1]}, check)
 				if err == nil {
 					t.Fatal("no error for a system without a release")
@@ -222,7 +228,7 @@ func TestSHA256SUMSNeedsExactlyOneWellFormedLineForTheBinary(t *testing.T) {
 				s := newRelServer(t)
 				s.put("/SHA256SUMS", c.sums)
 				s.put("/ocx-linux-amd64", newBuild)
-				exe := relBinaryIn(t, relRunning, 0o755)
+				exe := relBinaryIn(t, 0o755)
 				_, err := Run(Options{Location: s.srv.URL, Executable: exe, GOOS: "linux", GOARCH: "amd64"}, check)
 				if err == nil {
 					t.Error("no error for a SHA256SUMS without exactly one valid line")
@@ -240,10 +246,10 @@ func TestABinaryMatchingSHA256SUMSIsUpToDateEvenWhenReachedThroughALink(t *testi
 	s := newRelServer(t)
 	s.put("/SHA256SUMS", relLine("ocx-linux-amd64", relRunning))
 	s.put("/ocx-linux-amd64", "#!/bin/sh\necho some-other-build\n")
-	real := relBinaryIn(t, relRunning, 0o755)
+	realPath := relBinaryIn(t, 0o755)
 	linkDir := t.TempDir()
 	link := filepath.Join(linkDir, "ocx")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(realPath, link); err != nil {
 		t.Fatal(err)
 	}
 	for _, check := range []bool{false, true} {
@@ -255,10 +261,10 @@ func TestABinaryMatchingSHA256SUMSIsUpToDateEvenWhenReachedThroughALink(t *testi
 	if n := s.hits("/ocx-linux-amd64"); n != 0 {
 		t.Errorf("the binary was downloaded %d times", n)
 	}
-	if target, err := os.Readlink(link); err != nil || target != real {
-		t.Errorf("the link points to %q, %v; want %q", target, err, real)
+	if target, err := os.Readlink(link); err != nil || target != realPath {
+		t.Errorf("the link points to %q, %v; want %q", target, err, realPath)
 	}
-	relUntouched(t, real, relRunning)
+	relUntouched(t, realPath, relRunning)
 	if got := relNames(t, linkDir); !reflect.DeepEqual(got, []string{"ocx"}) {
 		t.Errorf("the link's directory holds %v, want only the link", got)
 	}
@@ -274,11 +280,11 @@ func TestReplacingThroughALinkReplacesTheLinkedFileAndKeepsTheLink(t *testing.T)
 	s.put("/SHA256SUMS", relLine("ocx-linux-amd64", newBuild))
 	s.put("/ocx-linux-amd64", newBuild)
 
-	real := relBinaryIn(t, relRunning, 0o700)
-	realDir := filepath.Dir(real)
+	realPath := relBinaryIn(t, 0o700)
+	realDir := filepath.Dir(realPath)
 	linkDir := t.TempDir()
 	link := filepath.Join(linkDir, "ocx")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(realPath, link); err != nil {
 		t.Fatal(err)
 	}
 	for _, dir := range []string{realDir, linkDir} {
@@ -291,14 +297,14 @@ func TestReplacingThroughALinkReplacesTheLinkedFileAndKeepsTheLink(t *testing.T)
 		t.Fatal(err)
 	}
 
-	if got := relRead(t, real); got != newBuild {
+	if got := relRead(t, realPath); got != newBuild {
 		t.Errorf("the linked file holds %q, want the release binary", got)
 	}
-	if fi, err := os.Stat(real); err != nil || fi.Mode().Perm() != 0o755 {
+	if fi, err := os.Stat(realPath); err != nil || fi.Mode().Perm() != 0o755 {
 		t.Errorf("the linked file's mode = %v, %v; want 0755", fi.Mode().Perm(), err)
 	}
-	if target, err := os.Readlink(link); err != nil || target != real {
-		t.Errorf("the link points to %q, %v; want %q", target, err, real)
+	if target, err := os.Readlink(link); err != nil || target != realPath {
+		t.Errorf("the link points to %q, %v; want %q", target, err, realPath)
 	}
 	for _, dir := range []string{realDir, linkDir} {
 		if got := relNames(t, dir); !reflect.DeepEqual(got, []string{"ocx", "other"}) {

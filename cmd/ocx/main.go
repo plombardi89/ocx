@@ -57,7 +57,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stderr, usage)
 		return 2
 	}
-	var status exitStatus
+	var status exitStatusError
 	var usage usageError
 	switch {
 	case err == nil:

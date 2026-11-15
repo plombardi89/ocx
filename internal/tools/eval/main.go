@@ -32,7 +32,7 @@ type listFlag []string
 
 func (l *listFlag) String() string { return strings.Join(*l, ",") }
 func (l *listFlag) Set(v string) error {
-	for _, s := range strings.Split(v, ",") {
+	for s := range strings.SplitSeq(v, ",") {
 		if s = strings.TrimSpace(s); s != "" {
 			*l = append(*l, s)
 		}

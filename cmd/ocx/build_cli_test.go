@@ -50,13 +50,13 @@ func copyRepository(t *testing.T) string {
 			if err != nil {
 				return err
 			}
-			defer in.Close()
+			defer func() { _ = in.Close() }()
 			out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, info.Mode().Perm())
 			if err != nil {
 				return err
 			}
 			if _, err := io.Copy(out, in); err != nil {
-				out.Close()
+				_ = out.Close()
 				return err
 			}
 			return out.Close()
@@ -78,7 +78,7 @@ func buildOcxIn(t *testing.T, root string, buildvcs bool) string {
 	if buildvcs {
 		vcsFlag = "-buildvcs=true"
 	}
-	cmd := exec.Command("go", "build", vcsFlag, "-o", bin, "./cmd/ocx")
+	cmd := exec.CommandContext(t.Context(), "go", "build", vcsFlag, "-o", bin, "./cmd/ocx")
 	cmd.Dir = root
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go build in %s: %v\n%s", root, err, out)
@@ -122,7 +122,7 @@ func TestVersionNamesTheCommitAndMarksUncommittedChanges(t *testing.T) {
 	checkout := copyRepository(t)
 	git := func(args ...string) string {
 		t.Helper()
-		cmd := exec.Command("git", args...)
+		cmd := exec.CommandContext(t.Context(), "git", args...)
 		cmd.Dir = checkout
 		cmd.Env = append(os.Environ(),
 			"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",

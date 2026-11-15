@@ -7,10 +7,11 @@ OpenCode agents, skills, and commands, plus the `ocx` binary that installs them 
 - Check everything that's free (seconds): `make check`
 - The same without running OpenCode, which is what CI runs: `make check-offline`
 - Go vet and unit tests only: `make test`
+- Lint the Go code, including its formatting, with golangci-lint and `.golangci.yml`: `make lint`
 - The eval fixtures' own tests only: `make fixtures-test`
 - Evals, which spend model tokens: `make eval-reviewer`, `make eval-critic`, `make eval-debug`, `make eval-tests`, `make eval-e2e`, or one scenario with `make eval ARGS="--scenario <name>"`
 - Compare models on one area: `make bakeoff TAG=reviewer` (or `critic`, `debug`, `tests`)
-- Format Go code: `make fmt`
+- Format Go code with gofumpt and goimports: `make fmt`
 - Try this checkout's configuration in OpenCode on purpose: `make apply`; run `ocx apply` from a released binary to go back
 
 ## Layout

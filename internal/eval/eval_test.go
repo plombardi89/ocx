@@ -112,8 +112,10 @@ func TestRenderPrompt(t *testing.T) {
 func TestWriteSummary(t *testing.T) {
 	dir := t.TempDir()
 	results := []Result{
-		{Scenario: "s1", Model: "p/a", Status: "pass", DurationSec: 60, Verdict: "APPROVE",
-			Summary: "OCREVIEW verdict=APPROVE spec=PASS quality=PASS blockers=0 majors=0 writing=0 minors=2 nits=1 head=abc"},
+		{
+			Scenario: "s1", Model: "p/a", Status: "pass", DurationSec: 60, Verdict: "APPROVE",
+			Summary: "OCREVIEW verdict=APPROVE spec=PASS quality=PASS blockers=0 majors=0 writing=0 minors=2 nits=1 head=abc",
+		},
 		{Scenario: "s1", Model: "p/a", Status: "fail", DurationSec: 120},
 		{Scenario: "s2", Model: "p/b", Status: "pass", DurationSec: 30},
 	}
