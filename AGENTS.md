@@ -9,8 +9,8 @@ OpenCode agents, skills, and commands, plus the Go tool `ocx` that checks, evalu
 - Go vet and unit tests only: `make test`
 - The eval fixtures' own tests only: `make fixtures-test`
 - Review the current commit before pushing, which spends model tokens: `make review`, then `make review ROUND=2 PREVIOUS=<sha>` after fixing findings
-- Evals, which spend model tokens: `make eval-reviewer`, `make eval-critic`, `make eval-debug`, `make eval-e2e`, or one scenario with `go run ./cmd/ocx eval --scenario <name>`
-- Compare models on one area: `make bakeoff TAG=reviewer` (or `critic`, `debug`)
+- Evals, which spend model tokens: `make eval-reviewer`, `make eval-critic`, `make eval-debug`, `make eval-tests`, `make eval-e2e`, or one scenario with `go run ./cmd/ocx eval --scenario <name>`
+- Compare models on one area: `make bakeoff TAG=reviewer` (or `critic`, `debug`, `tests`)
 - Format Go code: `make fmt`
 - Check a real install and repositories: `make doctor REPOS="<path> ..."`
 

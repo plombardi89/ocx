@@ -73,6 +73,8 @@ Show Phil the Goal, Non-goals, Acceptance criteria, and the critic's final verdi
 
 Create the feature branch (see the `git-workflow` skill), commit the plan as the first commit, then implement task by task, checking off tasks and appending to the Log as you go.
 
+When every task is implemented and committed, get independent tests for the acceptance criteria with the `requesting-tests` skill, then request review with the `requesting-review` skill.
+
 When the work is done, set `Status: done` and leave the file in place.
 
 ## Decision records

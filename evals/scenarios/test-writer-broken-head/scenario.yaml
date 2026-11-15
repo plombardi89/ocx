@@ -1,0 +1,29 @@
+name: test-writer-broken-head
+description: A Head that doesn't compile. The report is INCOMPLETE with every criterion NOT_RUN and no test files, and says why.
+fixture: go-service
+tags: [tests]
+agent: test-writer
+timeout: 30m
+branch: feat/product-pagination
+commits:
+  - message: "feat: paginate the product list"
+    overlays: [../reviewer-planted-bug/overlay, ../_shared/pagination-fix]
+  - message: "refactor: tidy the list handler"
+    overlay: overlay
+prompt: |
+  Test request
+  Repository: {{.Repo}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0001-product-pagination.md
+expect:
+  skill_loaded: test-writing
+  edits_in_scratch_only: true
+  unchanged: true
+  mentions:
+    - "(?i)(build|compil|syntax error)"
+  tests:
+    plan: docs/plans/0001-product-pagination.md
+    status: INCOMPLETE
+    criteria: 7
+    not_run: 7

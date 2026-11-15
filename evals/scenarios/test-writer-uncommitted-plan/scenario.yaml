@@ -1,0 +1,33 @@
+name: test-writer-uncommitted-plan
+description: The correct pagination change, with the plan edited in the working tree, uncommitted, to cap at 50. The tests follow the committed cap of 100, pass on Head, and fail when the code caps at 50.
+fixture: go-service
+tags: [tests]
+agent: test-writer
+timeout: 45m
+branch: feat/product-pagination
+commits:
+  - message: "feat: paginate the product list"
+    overlays: [../reviewer-planted-bug/overlay, ../_shared/pagination-fix]
+uncommitted: uncommitted
+prompt: |
+  Test request
+  Repository: {{.Repo}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0001-product-pagination.md
+expect:
+  skill_loaded: test-writing
+  edits_in_scratch_only: true
+  unchanged: true
+  tests:
+    plan: docs/plans/0001-product-pagination.md
+    command: [go, test, -count=1, ./...]
+    status: COMPLETE
+    passed: 7
+    failed: 0
+    gaps: 0
+    mutants:
+      - {name: a cap of 50, overlay: ../_shared/pagination-mutants/cap-at-50}
+    name_forbid:
+      - "(?i)\\b(plan|criteri(on|a)|acceptance|reviews?|reviewer|test-writer)\\b"
+      - "\\bAC ?\\d"

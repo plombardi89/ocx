@@ -1,0 +1,37 @@
+name: test-writer-vague-plan
+description: The correct split code, without tests of its own, and a plan that adds "Splitting is fast, even for large n." That criterion is a GAP with a suggested concrete wording; the other six pass and catch two mutants.
+fixture: go-service
+tags: [tests]
+agent: test-writer
+bakeoff: true
+timeout: 45m
+branch: feat/split-amounts
+commits:
+  - message: "feat: split an amount into equal parts"
+    overlays: [../_shared/split-impl, overlay]
+prompt: |
+  Test request
+  Repository: {{.Repo}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0002-split-amounts.md
+expect:
+  skill_loaded: test-writing
+  edits_in_scratch_only: true
+  unchanged: true
+  mentions:
+    - "(?i)(fast|speed|performance|quickly|time)"
+  tests:
+    plan: docs/plans/0002-split-amounts.md
+    command: [go, test, -count=1, ./...]
+    status: COMPLETE
+    passed: 6
+    failed: 0
+    gaps: 1
+    results: {7: GAP}
+    mutants:
+      - {name: larger parts last, overlay: ../_shared/split-mutants/larger-parts-last}
+      - {name: no limit on parts, overlay: ../_shared/split-mutants/no-max-parts}
+    name_forbid:
+      - "(?i)\\b(plan|criteri(on|a)|acceptance|reviews?|reviewer|test-writer)\\b"
+      - "\\bAC ?\\d"

@@ -1,0 +1,26 @@
+name: test-writer-missing-plan
+description: A request naming a plan that isn't at Head. The report is INCOMPLETE with no criteria and no test files.
+fixture: go-service
+tags: [tests]
+agent: test-writer
+timeout: 30m
+branch: feat/product-pagination
+commits:
+  - message: "feat: paginate the product list"
+    overlays: [../reviewer-planted-bug/overlay, ../_shared/pagination-fix]
+prompt: |
+  Test request
+  Repository: {{.Repo}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0009-product-search.md
+expect:
+  skill_loaded: test-writing
+  edits_in_scratch_only: true
+  unchanged: true
+  mentions:
+    - "(?i)(not found|doesn't exist|does not exist|missing|no such|isn't (there|at))"
+  tests:
+    plan: docs/plans/0009-product-search.md
+    status: INCOMPLETE
+    criteria: 0

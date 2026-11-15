@@ -35,8 +35,9 @@ const (
 // ScratchRoots maps each agent that may write files to the only directory it
 // may write in. Every other custom agent is read-only.
 var ScratchRoots = map[string]string{
-	"reviewer": "/tmp/opencode/reviews",
-	"debugger": "/tmp/opencode/debug",
+	"reviewer":    "/tmp/opencode/reviews",
+	"debugger":    "/tmp/opencode/debug",
+	"test-writer": "/tmp/opencode/tests",
 }
 
 // BuiltinAgents are the agents OpenCode ships. Overrides of these must not

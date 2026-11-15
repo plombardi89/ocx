@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -68,8 +69,12 @@ func (s reviewSummary) Counts() string {
 	return fmt.Sprintf("%d/%d/%d/%d/%d", s.Blockers, s.Majors, s.Writing, s.Minors, s.Nits)
 }
 
-// inScratch reports whether path is inside any agent's scratch root.
-func inScratch(path string) bool {
+// inScratch reports whether path is inside agent's own scratch root, or,
+// for an agent without one, inside any agent's.
+func inScratch(agent, path string) bool {
+	if root, ok := config.ScratchRoots[agent]; ok {
+		return strings.HasPrefix(path, root+"/")
+	}
 	for _, root := range config.ScratchRoots {
 		if strings.HasPrefix(path, root+"/") {
 			return true
@@ -99,6 +104,8 @@ func editTargets(input map[string]any) []string {
 }
 
 type asserter struct {
+	agent  string
+	dir    string // the scenario directory
 	ws     *Workspace
 	tr     *Transcript
 	final  string
@@ -169,19 +176,21 @@ func (a *asserter) run(e Expect) []Check {
 	}
 
 	if e.Unchanged {
-		status := gitOut(a.ws.Work, "status", "--porcelain")
-		head := gitOut(a.ws.Work, "rev-parse", "HEAD")
-		branch := gitOut(a.ws.Work, "branch", "--show-current")
-		ok := status == "" && head == a.ws.Head && branch == a.ws.Branch
-		add("repository unchanged", ok, "status=%q head=%s branch=%s", status, head, branch)
-
-		var extra []string
-		for _, line := range strings.Split(gitOut(a.ws.Work, "worktree", "list", "--porcelain"), "\n") {
-			if wt, ok := strings.CutPrefix(line, "worktree "); ok && wt != a.ws.Work {
-				extra = append(extra, wt)
+		after := captureState(a.ws.Work)
+		changes := a.ws.Before.changes(after)
+		add("repository unchanged", len(changes) == 0, "%s", strings.Join(changes, "; "))
+		var added, removed []string
+		for _, wt := range after.Worktrees {
+			if !slices.Contains(a.ws.Before.Worktrees, wt) {
+				added = append(added, wt)
 			}
 		}
-		add("no leftover worktrees", len(extra) == 0, "still registered: %v", extra)
+		for _, wt := range a.ws.Before.Worktrees {
+			if !slices.Contains(after.Worktrees, wt) {
+				removed = append(removed, wt)
+			}
+		}
+		add("worktrees as they were", len(added) == 0 && len(removed) == 0, "added %v, removed %v", added, removed)
 	}
 
 	if e.SkillLoaded != "" {
@@ -201,12 +210,23 @@ func (a *asserter) run(e Expect) []Check {
 				continue
 			}
 			for _, path := range editTargets(p.State.Input) {
-				if !inScratch(path) {
+				if !inScratch(a.agent, path) {
 					outside = append(outside, path)
 				}
 			}
 		}
-		add("edits only in scratch", len(outside) == 0, "edited outside the scratch roots: %v", outside)
+		add("edits only in scratch", len(outside) == 0, "edited outside the scratch root: %v", outside)
+	}
+
+	if e.Tests != nil {
+		r, ok := ParseTestsReport(a.final)
+		if ok {
+			a.summary, a.verdict = r.Line, r.Status
+		}
+		checks = append(checks, checkTestsReport(a.ws, a.final, *e.Tests)...)
+		if ok {
+			checks = append(checks, checkReturnedTests(a.ws, a.dir, r, *e.Tests)...)
+		}
 	}
 
 	if e.E2E != nil {
@@ -311,30 +331,60 @@ func (a *asserter) e2e(e E2E) []Check {
 		}
 	}
 
-	agent := e.DispatchAgent
-	if agent == "" {
-		agent = "reviewer"
+	ds := append([]Dispatch{}, e.Dispatches...)
+	legacy := e.DispatchAgent
+	if legacy == "" {
+		legacy = "reviewer"
 	}
-	var dispatches []Part
+	if !slices.ContainsFunc(ds, func(d Dispatch) bool { return d.Agent == legacy }) {
+		ds = append(ds, Dispatch{Agent: legacy, Prefix: e.DispatchPrefix, Forbid: e.DispatchForbid, Min: e.DispatchMin})
+	}
+	for _, d := range ds {
+		checks = append(checks, a.checkDispatch(d)...)
+	}
+	if len(e.DispatchOrder) > 0 {
+		checks = append(checks, a.checkDispatchOrder(e.DispatchOrder))
+	}
+	checks = append(checks, a.buildSide(e, pushed)...)
+	return checks
+}
+
+// dispatches returns the launches of agent, in order.
+func (a *asserter) dispatches(agent string) []Part {
+	var out []Part
 	for _, p := range a.tr.ToolCalls("subagent") {
 		if p.State != nil && p.State.Input["agent"] == agent {
-			dispatches = append(dispatches, p)
+			out = append(out, p)
 		}
 	}
-	if e.DispatchMin > 0 {
-		add(fmt.Sprintf("%s launched at least %d time(s)", agent, e.DispatchMin), len(dispatches) >= e.DispatchMin, "launched %d time(s)", len(dispatches))
+	return out
+}
+
+func (a *asserter) checkDispatch(d Dispatch) []Check {
+	var checks []Check
+	add := func(name string, ok bool, detail string, args ...any) {
+		checks = append(checks, Check{Name: name, OK: ok, Detail: fmt.Sprintf(detail, args...)})
+	}
+	dispatches := a.dispatches(d.Agent)
+	if d.Min > 0 {
+		add(fmt.Sprintf("%s launched at least %d time(s)", d.Agent, d.Min), len(dispatches) >= d.Min, "launched %d time(s)", len(dispatches))
+	}
+	if d.Max != nil {
+		add(fmt.Sprintf("%s launched at most %d time(s)", d.Agent, *d.Max), len(dispatches) <= *d.Max, "launched %d time(s)", len(dispatches))
 	}
 	want := ""
-	if r, ok := a.cfg.Agents[agent]; ok {
-		want = r.Model
+	if a.cfg != nil {
+		if r, ok := a.cfg.Agents[d.Agent]; ok {
+			want = r.Model
+		}
 	}
 	for i, p := range dispatches {
 		prompt, _ := p.State.Input["prompt"].(string)
-		name := fmt.Sprintf("%s dispatch %d", agent, i+1)
-		if e.DispatchPrefix != "" {
-			add(name+" uses the request template", strings.HasPrefix(strings.TrimSpace(prompt), e.DispatchPrefix), "prompt starts %q", truncate(prompt, 60))
+		name := fmt.Sprintf("%s dispatch %d", d.Agent, i+1)
+		if d.Prefix != "" {
+			add(name+" uses the request template", strings.HasPrefix(strings.TrimSpace(prompt), d.Prefix), "prompt starts %q", truncate(prompt, 60))
 		}
-		for _, f := range e.DispatchForbid {
+		for _, f := range d.Forbid {
 			if loc := regexp.MustCompile(f).FindString(prompt); loc != "" {
 				add(name+" has no framing", false, "matched %q: %q", f, loc)
 			}
@@ -342,26 +392,56 @@ func (a *asserter) e2e(e E2E) []Check {
 		if m, ok := p.State.Input["model"].(string); ok && m != "" {
 			add(name+" does not override the model", false, "model=%s", m)
 		}
+		if a.cfg == nil {
+			continue // unit tests have no sessions to export
+		}
 		child := ChildSessionID(p)
 		if child == "" || want == "" {
 			add(name+" child session found", false, "child=%q", child)
 			continue
 		}
-		exp, err := ExportSession(a.ctx, a.ws.Work, child, filepath.Join(a.outDir, fmt.Sprintf("%s-%d.json", agent, i+1)))
+		exp, err := ExportSession(a.ctx, a.ws.Work, child, filepath.Join(a.outDir, fmt.Sprintf("%s-%d.json", d.Agent, i+1)))
 		if err != nil {
 			add(name+" export", false, "%v", err)
 			continue
 		}
-		c := checkModel(exp, agent, want)
+		c := checkModel(exp, d.Agent, want)
 		c.Name = name + " " + c.Name
 		checks = append(checks, c)
 	}
 	return checks
 }
 
+// checkDispatchOrder requires the first launch of each agent to come in the
+// given order.
+func (a *asserter) checkDispatchOrder(order []string) Check {
+	name := "first launches in order " + strings.Join(order, ", ")
+	first := map[string]int{}
+	for i, p := range a.tr.ToolCalls("subagent") {
+		if p.State == nil {
+			continue
+		}
+		agent, _ := p.State.Input["agent"].(string)
+		if _, seen := first[agent]; !seen {
+			first[agent] = i
+		}
+	}
+	last := -1
+	for _, agent := range order {
+		i, ok := first[agent]
+		if !ok {
+			return Check{Name: name, Detail: agent + " was never launched"}
+		}
+		if i < last {
+			return Check{Name: name, Detail: agent + " was first launched too early"}
+		}
+		last = i
+	}
+	return Check{Name: name, OK: true}
+}
+
 // changedFiles lists files that differ from the workspace's base commit,
-// whether committed, modified, or new. Staged configuration is excluded by
-// .git/info/exclude.
+// whether committed, modified, or new. Staged configuration ignores itself.
 func (a *asserter) changedFiles() []string {
 	seen := map[string]bool{}
 	var out []string

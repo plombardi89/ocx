@@ -1,0 +1,35 @@
+name: test-writer-planted-bug
+description: Pagination change that ignores the 100-item cap and panics past the end, behind happy-path tests that pass. The test-writer's tests must fail on both, and pass on the correct code.
+fixture: go-service
+tags: [tests]
+agent: test-writer
+bakeoff: true
+timeout: 45m
+branch: feat/product-pagination
+commit_message: "feat: paginate the product list"
+overlay: ../reviewer-planted-bug/overlay
+prompt: |
+  Test request
+  Repository: {{.Repo}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0001-product-pagination.md
+expect:
+  skill_loaded: test-writing
+  edits_in_scratch_only: true
+  unchanged: true
+  mentions:
+    - "(?i)(panic|out of range|slice bounds)"
+    - "(?i)\\b100\\b"
+  tests:
+    plan: docs/plans/0001-product-pagination.md
+    command: [go, test, -count=1, ./...]
+    status: COMPLETE
+    gaps: 0
+    not_run: 0
+    min_failed: 2
+    results: {3: FAILED, 5: FAILED}
+    fixed: [../_shared/pagination-fix]
+    name_forbid:
+      - "(?i)\\b(plan|criteri(on|a)|acceptance|reviews?|reviewer|test-writer)\\b"
+      - "\\bAC ?\\d"

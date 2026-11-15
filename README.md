@@ -1,6 +1,6 @@
 # ocx
 
-OpenCode agents, skills, and commands for building complex software, with **independent, adversarial checks at both ends**: a plan critic before any code is written, and a review gate before anything is pushed. Both run on a different model family from the agent writing the code.
+OpenCode agents, skills, and commands for building complex software, with **independent, adversarial checks from start to finish**: a plan critic before any code is written, tests written from the plan once the code is committed, and a review gate before anything is pushed. Each runs in a fresh context on a different model from the agent writing the code.
 
 ## How it works
 
@@ -19,6 +19,17 @@ you ──▶ /plan <the work>
           │  returns APPROVE or REVISE, plus questions for you
           ▼
         you approve the plan ──▶ build implements on feat/… or fix/… branches
+          │
+          ▼
+        test-writer subagent (Claude Sonnet, fresh context, cannot touch your tree)
+          │  gets only: repository, base, head, plan
+          │  writes tests from the plan's acceptance criteria, never from the
+          │  code, runs them in a scratch worktree under /tmp/opencode/tests,
+          │  and breaks the code there to show each passing test can fail
+          │  returns PASSED, FAILED, GAP, or NOT_RUN per criterion, with the files
+          ▼
+        build adopts the tests unchanged, fixes the code until they pass;
+        gaps and disputes go to you
           │
           ▼
         reviewer subagent (GPT-6.1 Sol, fresh context, cannot touch your tree)
@@ -41,6 +52,7 @@ Independence comes from the setup, not from asking nicely:
 | Shared blind spots | Reviewer is pinned to a different model family than the driver |
 | Findings argued away | Findings carry executed evidence where feasible: a `review_` harness that fails, with its code in the report |
 | Author drops inconvenient findings | Findings are fixed or disputed to Phil, never dropped; 3-round cap, then escalate |
+| Tests that share the author's blind spots | For planned work, the test-writer writes tests from the acceptance criteria in a fresh context; expected values come only from the plan, and each passing test is shown to catch a deliberate break. Build adopts them unchanged and may not weaken one without Phil's approval |
 | Fixes without proof | Every BLOCKER and MAJOR fix needs a regression test; next round, the reviewer runs it on the previous commit and requires it to fail there |
 | Author skips review | Pre-push hook requires an approval note; only the reviewer may write notes; policies block `--no-verify`, `git -c`, `git config`, hook edits, force pushes, main/master |
 | Unreadable comments and docs | The writing rules apply to every agent; the reviewer reports clear breaks as WRITING findings, which block approval |
@@ -85,17 +97,33 @@ The reviewer may write and run code to prove a point, but only in a detached scr
 - **Report:** evidence is labelled `executed` or `traced`; a "Harnesses" section carries each harness's command, result, and code. The code lives in the review note, so the author can adopt it as a regression test and the next round can re-run it.
 - **Later rounds:** each earlier BLOCKER/MAJOR must be fixed (earlier harness now passes) and covered by a regression test that fails on the previously reviewed commit. Missing or toothless regression tests are a MAJOR. If build thinks a test is impractical, that's a dispute for Phil.
 
+## Independent tests
+
+For every plan with acceptance criteria, build follows the `requesting-tests` skill once every task is committed and passing, before it requests review:
+
+1. It launches the `test-writer` subagent with only the repository, base, head, and plan.
+2. The test-writer reads the plan, the code, and the existing tests as they are at Head, in a scratch worktree under `/tmp/opencode/tests/`. It writes new test files, one or more tests per criterion, with expected values from the plan only, and runs them.
+3. Each criterion gets one result:
+   1. PASSED: its tests pass, and the test-writer names a small break in the code that one of its new tests caught.
+   2. FAILED: a test shows the code doesn't do what the plan says, with the command and the expected and actual results.
+   3. GAP: the plan gives no value a test could check, with a suggested concrete wording for Phil.
+   4. NOT_RUN: it couldn't be tested, for example because Head doesn't build. The report is then INCOMPLETE.
+4. Build checks the whole report against the plan, adopts the files exactly in a commit of their own, registers them if the normal test command wouldn't run them, and fixes the code until they pass. It never changes an expected result, removes an assertion, or skips a test without Phil's approval.
+5. Gaps, disputed tests, and INCOMPLETE reports build can't fix go to Phil, and review waits until they're resolved. `/write-tests <plan>` runs the same flow on the current branch.
+
 ## Layout
 
 ```
 config/opencode.jsonc     agents, models, baseline permissions, policies (single source of truth)
 config/global-AGENTS.md   global working agreements and writing rules (becomes ~/.config/opencode/AGENTS.md)
 config/prompts/           agent system prompts, referenced with {file:./prompts/…}
-skills/                   code-review, plan-critique, requesting-review, git-workflow, writing-plans,
-                          writing-style, systematic-debugging, second-opinion
+skills/                   code-review, plan-critique, requesting-review, requesting-tests, test-writing,
+                          git-workflow, writing-plans, writing-style, systematic-debugging,
+                          second-opinion
 commands/                 /plan: plan work with a critique and your approval
                           /critique-plan <file>: run the plan critic yourself
                           /debug <problem>: reproduce, find the root cause, fix, review
+                          /write-tests <plan>: independent tests from the plan, then review
                           /review: run the reviewer on the current branch yourself
 hooks/pre-push            the review gate
 templates/AGENTS.md       starting point for a project's AGENTS.md
@@ -116,8 +144,9 @@ cmd/ocx, internal/        Go tooling behind the Makefile
 | `make eval-reviewer` | Reviewer scenarios with the pinned reviewer model | tokens |
 | `make eval-critic` | Plan-critic scenarios, plus the end-to-end planning run | tokens |
 | `make eval-debug` | Debugger and consultant scenarios, plus the end-to-end debugging run | tokens |
-| `make eval-e2e` | End-to-end runs: planning flow, debugging flow, and implement → review → push through the gate | tokens |
-| `make bakeoff` | One tag's comparison scenarios × `BAKEOFF_MODELS` × `REPS` (`TAG=reviewer`, `critic`, or `debug`) | tokens |
+| `make eval-tests` | Test-writer scenarios, plus build's side of the flow end to end | tokens |
+| `make eval-e2e` | End-to-end runs: planning, debugging, the test-writer flow, and implement → review → push through the gate | tokens |
+| `make bakeoff` | One tag's comparison scenarios × `BAKEOFF_MODELS` × `REPS` (`TAG=reviewer`, `critic`, `debug`, or `tests`) | tokens |
 | `make verify` | `check` + every eval: the single "is everything good?" entrypoint | tokens |
 | `make sandbox` | Throwaway copy of the fixture with this config staged; opens OpenCode in it (`SCENARIO=reviewer-planted-bug` to start on a review branch) | — |
 | `make hook-install REPO=…` | Install the review gate into a repository | — |
@@ -148,10 +177,32 @@ Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run even
 | `debugger-unstable-sort` | Paging shows products twice or never: sorting by name leaves ties in random map order. Dedupe and `SliceStable` are wrong fixes; the debugger must find the tie and break it by ID |
 | `consultant-second-opinion` | The same bug after three attempts that all looked elsewhere: the consultant must question their shared assumption |
 | `e2e-debug-flow` | build reproduces the bug, fixes it in the store with a regression test, gets it reviewed, and pushes a `fix/` branch |
+| `test-writer-planted-bug` | The pagination change that ignores the 100-item cap and panics past the end: those criteria FAILED, and the tests pass on the correct code |
+| `test-writer-clean` | The correct pagination change: 7 of 7 PASSED, and the tests catch five mutants the existing tests miss (no cap, a panic past the end, a default of 10, items sorted by name instead of ID, `total` capped at 100) |
+| `test-writer-vague-plan` | The split code without its tests, and a plan that adds "Splitting is fast, even for large n.": that criterion is a GAP, the other six PASSED, and two mutants are caught |
+| `test-writer-python` | The tagging change that shares one default list: that criterion FAILED, and the tests pass on the correct code |
+| `test-writer-shell` | The backup-manifest change that breaks on paths with spaces: FAILED, the tests pass on the correct script, and How to run says to register them in `tests/run.sh` |
+| `test-writer-broken-head` | A Head that doesn't compile: INCOMPLETE, every criterion NOT_RUN, no test files |
+| `test-writer-missing-plan` | A plan that isn't at Head: INCOMPLETE, no criteria, no test files |
+| `test-writer-uncommitted-plan` | The plan edited in the working tree, uncommitted, to cap at 50: the tests follow the committed cap of 100 |
+| `e2e-test-flow` | build implements the approved split plan, gets tests with the bare template before review, adopts them exactly, and pushes |
+| `e2e-test-failed` | `/write-tests` on the planted pagination bug: build adopts the failing tests exactly, fixes the code, and the pushed tests still catch the bug |
+| `e2e-test-shell` | `/write-tests` on the planted shell bug: build also registers the tests in `tests/run.sh` in a commit of their own, so `make test` catches the bug |
+| `e2e-test-gap-stops` | A stubbed report with a GAP: build brings it to Phil, launches no reviewer, and pushes nothing |
+| `e2e-test-incomplete-stops` | A stubbed INCOMPLETE report build can't fix (a full disk): it stops and tells Phil |
+| `e2e-test-invalid-report-stops` | A stubbed report that skips a criterion: build asks once more, then brings both reports to Phil |
+| `e2e-test-retry-recovers` | A stubbed flaky INCOMPLETE report, then a COMPLETE one: build reruns once without asking, logs why, and pushes |
+| `e2e-test-retry-stops` | The same flaky cause twice: build stops after one rerun and tells Phil |
 
 Fixtures: `go-service` (Go), `py-service` (Python, standard-library `unittest`), and `sh-tools` (bash). Each has a `make test` target, so no extra tools are needed.
 
-Scenarios can stack several commits on a branch or on main, seed earlier review notes, and layer base overlays (`base_overlays:`, `commits:` with `overlays:` and `note:`); shared material lives in `evals/scenarios/_shared/`.
+Scenarios can stack several commits on a branch or on main, seed earlier review notes, and layer base overlays (`base_overlays:`, `commits:` with `overlays:` and `note:`); shared material lives in `evals/scenarios/_shared/`. They can also leave an uncommitted change (`uncommitted:`) and stub an agent so each launch returns the next of a set of fixed reports (`stub_agents:`).
+
+Test-writer scenarios don't trust the report. The eval runs the scenario's test command (`command:`) in a fresh checkout of Head, with and without the returned test files, and credits the returned tests only with the difference, the same way for every language:
+
+1. Without them the command passes; with them it fails exactly when the report has FAILED criteria.
+2. With the scenario's correct implementation (`fixed:`), it passes with them.
+3. With each of the scenario's mutants (`mutants:`), it passes without them, so the existing tests miss the mutant, and fails with them.
 
 ## Models
 
@@ -164,9 +215,10 @@ All models are set in `config/opencode.jsonc`. MAI models are never used; `make 
 | `plan-critic` | `gpt-6-astra#high` | Different family from the driver, and a different model from the reviewer; tied for best in our model comparison (below) |
 | `debugger` | `claude-opus-5.5#xhigh` | Deep, long-context investigation; build applies its fix and the reviewer still checks it |
 | `consultant` | `gpt-6.1-sol#xhigh` | Different family from the driver, so its second opinion doesn't share build's assumptions |
+| `test-writer` | `claude-sonnet-5.5#xhigh` | A different model from the driver; won our model comparison (below), passing every run and fastest |
 | `explore` | `claude-haiku-5.5` | Matches Opus on code-search recall, much faster |
 
-Planned for later slices: `test-writer` (Sonnet 5.5 xhigh), `security-reviewer` (GPT-6 Astra high), `lead`/`implementer`.
+Planned for later slices: `security-reviewer` (GPT-6 Astra high), `lead`/`implementer`.
 
 ### Reviewer model comparison
 
@@ -199,10 +251,26 @@ Astra stays the critic: it ties Sol on quality, and using a different model at e
 1. **Debugger stays on Opus:** equally correct and about 3 times faster. Build applies its fix and the reviewer, on GPT, still checks it.
 2. **Consultant stays on Sol:** Opus was faster, but a second opinion is only useful if it doesn't share the stuck agent's assumptions, and build runs on Opus.
 
+### Test-writer model comparison
+
+`make bakeoff TAG=tests` ran the 5 test-writer comparison scenarios 3 times each on 3 models (45 runs, 2026-11-12). Every model flagged the same criteria on every planted bug and reported the vague criterion as a GAP every time.
+
+| Model | Passed | Mean time | Mutants caught in `test-writer-clean` (the earlier set) |
+| --- | --- | --- | --- |
+| Claude Sonnet 5.5 (xhigh) | 15/15 | 3m37s | 15/15 |
+| GPT-6.1 Sol (xhigh) | 13/15 | 4m47s | 14/15 |
+| GPT-6 Astra (high) | 12/15 | 4m34s | 15/15 |
+
+1. **Sonnet stays the test-writer:** it passed every run and was the fastest.
+2. **Most GPT failures were a check, not the tests.** Three runs failed because the Python scenario then required the report to name the cause, a shared default list. Their tests failed on the bug and passed on the correct code, and the report gave expected and actual results, as the skill asks. That check has since been dropped: naming causes is the reviewer's job. One Astra run errored before it started.
+3. **Sol's one real miss:** in one run, its tests didn't catch items sorted in the wrong order.
+
+Sonnet is the same family as the Opus driver. The comparison rules only prefer a different family to break a tie, and there was none.
+
 ## Permissions model
 
-- **Baseline (all agents):** shell asks by default; read-only git and build/test/lint commands are pre-approved; committing and pushing are denied (build re-allows them); review notes are read-only; `.env`/keys denied; `.git/` uneditable; outside directories ask; only `explore`, `plan-critic`, `reviewer`, `debugger`, and `consultant` can be launched as subagents.
-- **Custom agents** start with a deny-all rule and allowlist what they need. `make check` enforces this; that only the reviewer (`/tmp/opencode/reviews/`) and the debugger (`/tmp/opencode/debug/`) write files, each only in its own scratch root; and that their shell allowlists stay within the read-only baseline. The reviewer's exceptions are its verdict note, scratch worktrees (`git worktree add --detach|remove --force` under the scratch root, path traversal denied), `go run`, and scripts inside its scratch worktree.
+- **Baseline (all agents):** shell asks by default; read-only git and build/test/lint commands are pre-approved; committing and pushing are denied (build re-allows them); review notes are read-only; `.env`/keys denied; `.git/` uneditable; outside directories ask; only `explore`, `plan-critic`, `reviewer`, `debugger`, `consultant`, and `test-writer` can be launched as subagents.
+- **Custom agents** start with a deny-all rule and allowlist what they need. `make check` enforces this; that only the reviewer (`/tmp/opencode/reviews/`), the debugger (`/tmp/opencode/debug/`), and the test-writer (`/tmp/opencode/tests/`) write files, each only in its own scratch root; and that their shell allowlists stay within the read-only baseline. The reviewer's exceptions are its verdict note, scratch worktrees (`git worktree add --detach|remove --force` under the scratch root, path traversal denied), `go run`, and scripts inside its scratch worktree.
 - **Policies** hard-deny what must never happen regardless of approvals: pushes to main/master, force pushes, `--no-verify`, ref deletion, git global options and environment variables that retarget commands (`git -c`, `git -C`, `--git-dir`, `GIT_DIR`, `GIT_CONFIG_*`), `git config` writes, `git update-ref`, touching hooks, `gh pr merge|review|ready`, `gh api`, `sudo`, publishing, and reaching into the Windows C: drive (`/mnt/c`) from a project elsewhere: the file tools there, `cd` into it, a shell working directory in it, and any shell command containing `/mnt/c`, including lookalikes such as `/mnt/cache`. A project opened on the C: drive itself isn't blocked: OpenCode checks paths inside a project relative to it, so the file tools and shell commands with relative paths work there.
 
 ## Using it

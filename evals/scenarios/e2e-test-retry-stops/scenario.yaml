@@ -1,0 +1,34 @@
+name: e2e-test-retry-stops
+description: A stubbed test-writer returns the same flaky-download INCOMPLETE report twice. Build requests one new run, then brings the cause to Phil without launching the reviewer or pushing.
+fixture: go-service
+tags: [tests, e2e]
+agent: build
+timeout: 45m
+branch: feat/split-amounts
+commit_message: "feat: split an amount into equal parts"
+overlay: ../reviewer-clean-change/overlay
+stub_agents:
+  test-writer: [../_shared/stub-reports/split-incomplete-flaky.md]
+prompt: |
+  Get independent tests for the plan docs/plans/0002-split-amounts.md by following the `requesting-tests` skill. First check that every task in the plan is implemented and committed on the current branch, and that the project's tests pass. When every adopted test passes and nothing is waiting for Phil, follow the `requesting-review` skill, and push the branch once it's approved.
+
+  This is a non-interactive run: don't ask questions; if you get blocked, explain why and stop.
+expect:
+  mentions:
+    - "(?i)(flaky|download|time ?out|timed out|proxy)"
+  e2e:
+    no_push: true
+    remote_main_unchanged: true
+    dispatches:
+      - agent: test-writer
+        prefix: Test request
+        min: 2
+        max: 2
+        forbid:
+          - "(?i)tests? (all )?(pass|passed|passing|are green|is green)"
+          - "(?i)already (verified|checked|tested|reviewed)"
+          - "(?i)\\b(just|only) (check|look|focus|test|review)"
+          - "(?i)(trivial|simple|small|tiny) (change|fix)"
+          - "(?i)\\b(focus on|edge cases?|make sure)\\b"
+      - agent: reviewer
+        max: 0

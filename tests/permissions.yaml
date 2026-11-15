@@ -125,6 +125,40 @@ probes:
   - { agent: build, action: subagent, resource: debugger, expect: allow }
   - { agent: build, action: subagent, resource: consultant, expect: allow }
 
+  # test-writer: reads, runs tests, writes and runs code only in /tmp/opencode/tests
+  - { agent: test-writer, action: read, resource: internal/api/api.go, expect: allow }
+  - { agent: test-writer, action: read, resource: .env, expect: deny }
+  - { agent: test-writer, action: edit, resource: /tmp/opencode/tests/shop-1a2b3c4-x/internal/api/list_test.go, expect: allow }
+  - { agent: test-writer, action: edit, resource: internal/api/list_test.go, expect: deny }
+  - { agent: test-writer, action: edit, resource: /tmp/opencode/reviews/x/a_test.go, expect: deny }
+  - { agent: test-writer, action: edit, resource: /tmp/opencode/debug/x/a_test.go, expect: deny }
+  - { agent: test-writer, action: external_directory, resource: "/tmp/opencode/tests/shop-1a2b3c4-x/*", expect: allow }
+  - { agent: test-writer, action: external_directory, resource: "/tmp/opencode/reviews/x/*", expect: deny }
+  - { agent: test-writer, action: shell, resource: "git worktree add --detach /tmp/opencode/tests/x HEAD", expect: allow }
+  - { agent: test-writer, action: shell, resource: "git worktree add --detach /tmp/opencode/tests/../reviews/x HEAD", expect: deny }
+  - { agent: test-writer, action: shell, resource: "git worktree remove --force /tmp/opencode/tests/x", expect: allow }
+  - { agent: test-writer, action: shell, resource: "git show abc1234:docs/plans/0001-product-pagination.md", expect: allow }
+  - { agent: test-writer, action: shell, resource: "go test ./...", expect: allow }
+  - { agent: test-writer, action: shell, resource: "go test -race ./...", expect: allow }
+  - { agent: test-writer, action: shell, resource: "python3 -m unittest discover -s tests", expect: allow }
+  - { agent: test-writer, action: shell, resource: "bash /tmp/opencode/tests/x/tests/run.sh", expect: allow }
+  - { agent: test-writer, action: shell, resource: "bash ./deploy.sh", expect: deny }
+  - { agent: test-writer, action: shell, resource: "git commit -m x", expect: deny }
+  - { agent: test-writer, action: shell, resource: "git push origin x", expect: deny }
+  - { agent: test-writer, action: shell, resource: "git notes --ref=ocreview add -m x HEAD", expect: deny }
+  - { agent: test-writer, action: shell, resource: "git checkout -- .", expect: deny }
+  - { agent: test-writer, action: subagent, resource: reviewer, expect: deny }
+  - { agent: test-writer, action: subagent, resource: test-writer, expect: deny }
+  - { agent: test-writer, action: question, resource: "*", expect: deny }
+  - { agent: test-writer, action: webfetch, resource: "https://example.com", expect: deny }
+  - { agent: test-writer, action: websearch, resource: "anything", expect: deny }
+  - { agent: test-writer, action: skill, resource: test-writing, expect: allow }
+  - { agent: test-writer, action: skill, resource: writing-style, expect: allow }
+  - { agent: test-writer, action: skill, resource: code-review, expect: deny }
+  - { agent: build, action: subagent, resource: test-writer, expect: allow }
+  - { agent: reviewer, action: subagent, resource: test-writer, expect: deny }
+  - { agent: debugger, action: subagent, resource: test-writer, expect: deny }
+
   # build: implements, commits, pushes feature branches; never main, never notes
   - { agent: build, action: edit, resource: internal/store/store.go, expect: allow }
   - { agent: build, action: edit, resource: .git/hooks/pre-push, expect: deny }
@@ -209,6 +243,8 @@ probes:
   - { agent: plan, action: shell, resource: "ls /mnt/c/Users", expect: deny }
   - { agent: explore, action: shell, resource: "ls /mnt/c/Users", expect: deny }
   - { agent: general, action: shell, resource: "ls /mnt/c/Users", expect: deny }
+  - { agent: test-writer, action: shell, resource: "go run /mnt/c/Users/phil/tool.go", expect: deny }
+  - { agent: test-writer, action: shell, resource: "bash /tmp/opencode/tests/shop-abc1234-kqvx/run.sh /mnt/c/Users", expect: deny }
   - { agent: build, action: shell, resource: "ls /mnt/c>files.txt", expect: deny }
   - { agent: build, action: shell, resource: "ls /mnt/c> /dev/null", expect: deny }
   - { agent: build, action: shell, resource: "wc -l </mnt/c/Windows/win.ini", expect: deny }

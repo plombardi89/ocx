@@ -1,0 +1,32 @@
+name: test-writer-python
+description: Python tagging change whose default tag list is shared by every product and changed in place. The test-writer's tests must fail on it and pass on the correct code; the report gives expected and actual results, and naming the cause is the reviewer's job.
+fixture: py-service
+tags: [tests, python]
+agent: test-writer
+bakeoff: true
+timeout: 45m
+branch: feat/product-tags
+commit_message: "feat: tag new products"
+overlay: ../reviewer-python-planted-bug/overlay
+prompt: |
+  Test request
+  Repository: {{.Repo}}
+  Base: {{.Base}}
+  Head: {{.Head}}
+  Plan: docs/plans/0001-product-tags.md
+expect:
+  skill_loaded: test-writing
+  edits_in_scratch_only: true
+  unchanged: true
+  tests:
+    plan: docs/plans/0001-product-tags.md
+    command: [python3, -m, unittest, discover, -s, tests]
+    status: COMPLETE
+    gaps: 0
+    not_run: 0
+    min_failed: 1
+    results: {2: FAILED}
+    fixed: [../_shared/tags-correct]
+    name_forbid:
+      - "(?i)\\b(plan|criteri(on|a)|acceptance|reviews?|reviewer|test-writer)\\b"
+      - "\\bAC ?\\d"
