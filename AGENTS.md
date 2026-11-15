@@ -21,7 +21,7 @@ OpenCode agents, skills, and commands, plus the Go tool `ocx` that checks, evalu
 - `config/global-AGENTS.md`: working agreements, installed as the global `AGENTS.md`
 - `skills/`, `commands/`: installed as they are
 - `hooks/pre-push`: the review gate
-- `docs/adr/`: Phil's decisions that are in force; plans in `docs/plans/` are deleted once their work has merged
+- `docs/adr/`: the user's decisions that are in force; plans in `docs/plans/` are deleted once their work has merged
 - `tests/permissions.yaml`: permission probes
 - `evals/`: fixtures and scenarios; `evals/results/` is ignored by git
 - `cmd/ocx/`, `internal/`: the Go tool

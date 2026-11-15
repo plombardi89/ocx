@@ -1,5 +1,5 @@
 name: e2e-test-invalid-report-stops
-description: A stubbed test-writer returns a COMPLETE report for the seven-criterion pagination plan that lists only six criteria. Build requests one new run, gets the same report, and brings both to Phil without launching the reviewer or pushing.
+description: A stubbed test-writer returns a COMPLETE report for the seven-criterion pagination plan that lists only six criteria. Build requests one new run, gets the same report, and brings both to the user without launching the reviewer or pushing.
 fixture: go-service
 tags: [tests, e2e]
 agent: build
@@ -11,7 +11,7 @@ commits:
 stub_agents:
   test-writer: [../_shared/stub-reports/pagination-six-criteria.md]
 prompt: |
-  Get independent tests for the plan docs/plans/0001-product-pagination.md by following the `requesting-tests` skill. First check that every task in the plan is implemented and committed on the current branch, and that the project's tests pass. When every adopted test passes and nothing is waiting for Phil, follow the `requesting-review` skill, and push the branch once it's approved.
+  Get independent tests for the plan docs/plans/0001-product-pagination.md by following the `requesting-tests` skill. First check that every task in the plan is implemented and committed on the current branch, and that the project's tests pass. When every adopted test passes and nothing is waiting for the user, follow the `requesting-review` skill, and push the branch once it's approved.
 
   This is a non-interactive run: don't ask questions; if you get blocked, explain why and stop.
 expect:

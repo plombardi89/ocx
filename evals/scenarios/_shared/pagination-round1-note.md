@@ -28,7 +28,7 @@ None
    2. Impact: clients can request pages of any size, violating the acceptance criterion.
    3. Fix: clamp `limit` to 100 before calling `Store.List`.
 
-## TODOs for Phil
+## Open TODOs
 None
 
 ## Claims in the request

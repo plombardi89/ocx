@@ -47,13 +47,13 @@ git push -u origin <type>/<slug>
 
 - Never push to `main` or `master`, force-push, delete remote branches, or use `--no-verify`. These are blocked for agents anyway.
 - If the hook rejects the push, read its message and fix the cause. Don't work around it.
-- If the remote branch moved, stop and tell Phil. A rebase creates new commits that need a new review.
+- If the remote branch moved, stop and tell the user. A rebase creates new commits that need a new review.
 
 ## Pull requests
 
-Open a pull request only when the remote is on GitHub and `gh` works: `git remote get-url origin` names `github.com`, and `gh auth status` succeeds. Otherwise, push the branch, don't open anything, and give Phil the same summary in your reply, with the four parts below. The branch is ready for him to merge.
+Open a pull request only when the remote is on GitHub and `gh` works: `git remote get-url origin` names `github.com`, and `gh auth status` succeeds. Otherwise, push the branch, don't open anything, and give the user the same summary in your reply, with the four parts below. The branch is ready for the user to merge.
 
-On GitHub, after the branch is pushed, open a pull request against `main`. If the branch adds any TODO comments, open it as a draft so it can't be merged until Phil decides on each one:
+On GitHub, after the branch is pushed, open a pull request against `main`. If the branch adds any TODO comments, open it as a draft so it can't be merged until the user decides on each one:
 
 ```sh
 gh pr create --base main --head <type>/<slug> --title "<subject>" --body-file <file>
@@ -65,6 +65,6 @@ Write the body, or the summary, following the `writing-style` skill; for `gh`, w
 1. What changed and why (link the plan file if there is one).
 2. How it was verified (commands and results).
 3. The review verdict (`git notes --ref=ocreview show HEAD`, first line) and any MINOR findings left open.
-4. **Decisions for Phil:** every TODO the branch adds, with its file and line, and the question "fix now or remove?", and every MAJOR or WRITING finding the approving review left open. Write "None" if there are none.
+4. **Decisions needed:** every TODO the branch adds, with its file and line, and the question "fix now or remove?", and every MAJOR or WRITING finding the approving review left open. Write "None" if there are none.
 
-Never merge pull requests, approve them, mark them ready for review, or call `gh api`. Those decisions are Phil's.
+Never merge pull requests, approve them, mark them ready for review, or call `gh api`. Those decisions are the user's.

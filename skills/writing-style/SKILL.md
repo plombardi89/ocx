@@ -1,6 +1,6 @@
 ---
 name: writing-style
-description: Use when writing or reviewing anything people will read - code comments, doc comments, test names, docs, plans, commit messages, pull request descriptions, review reports, or replies to Phil.
+description: Use when writing or reviewing anything people will read - code comments, doc comments, test names, docs, plans, commit messages, pull request descriptions, review reports, or replies to the user.
 ---
 
 # Writing style
@@ -52,7 +52,7 @@ A TODO says what is missing and why, in a way that makes sense on its own:
 // TODO: support currencies other than USD; amounts are stored as US cents only.
 ```
 
-Every new TODO goes to Phil, who decides whether to fix it now or remove it. List each one in your summary and in the pull request under "Decisions for Phil". A pull request that adds TODOs is opened as a draft, so it can't be merged until Phil decides.
+Every new TODO goes to the user, who decides whether to fix it now or remove it. List each one in your summary and in the pull request under "Decisions needed". A pull request that adds TODOs is opened as a draft, so it can't be merged until the user decides.
 
 ## 2. Comments stand on their own
 
@@ -146,7 +146,7 @@ sequenceDiagram
 
 1. The commit subject is a Conventional Commits line in plain English: `fix: return an empty page for offsets past the end`.
 2. The body explains why, in short sentences. Naming the plan file in a commit message or pull request is fine; those are documents, not code.
-3. Pull request descriptions follow every rule above, and list new TODOs under "Decisions for Phil".
+3. Pull request descriptions follow every rule above, and list new TODOs under "Decisions needed".
 
 ## Reviewing writing
 

@@ -10,7 +10,7 @@ Replaces: <NNNN-slug of the ADR this one replaces, or none>
 
 ## Decision
 
-<What Phil decided, stated plainly.>
+<What the user decided, stated plainly.>
 
 ## Alternatives considered
 

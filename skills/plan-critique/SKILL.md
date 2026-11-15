@@ -48,9 +48,9 @@ For each criterion, in order:
 
 Apply the `writing-style` skill to the plan. Report each clear break as a WRITING finding with the quoted text, the rule, and a rewrite.
 
-## 6. Collect questions for Phil
+## 6. Collect questions for the user
 
-1. Every entry in the plan's "Open questions" section goes under "Questions for Phil". A plan with open questions can't be approved.
+1. Every entry in the plan's "Open questions" section goes under "Questions for the user". A plan with open questions can't be approved.
 2. When a criterion needs a product decision the goal doesn't settle (for example, whether `limit=0` returns an empty page or a 400), add it as a question with a suggested default, and report the gap as a MAJOR finding.
 
 ## 7. Classify
@@ -67,7 +67,7 @@ Every BLOCKER and MAJOR quotes the plan text (or names what's missing), describe
 
 ## 8. Decide
 
-APPROVE only if there are no BLOCKER, MAJOR, or WRITING findings and no questions for Phil. Otherwise REVISE.
+APPROVE only if there are no BLOCKER, MAJOR, or WRITING findings and no questions for the user. Otherwise REVISE.
 
 ## 9. Write the report
 
@@ -84,7 +84,7 @@ Your final message is exactly this structure:
    2. Problem: <the concrete situation the plan leaves undefined or gets wrong>
    3. Suggested change: <replacement or new criterion text>
 
-## Questions for Phil
+## Questions for the user
 1. <question, most important first> Suggested default: <answer>
 
 ## Checked
@@ -102,6 +102,6 @@ Write "None" under any empty section. Order findings by severity: BLOCKER, MAJOR
 | "The plan is short, so it must be simple." | Short plans leave the most undefined. Check every criterion. |
 | "The Log says round 1 findings were fixed." | That's a claim. Read the plan text. |
 | "I'd build this differently." | Only report what breaks the goal, the code, or the reviewer's ability to check. Preferences are NITs. |
-| "The plan should also do X." | If the goal doesn't need X, it's scope creep, not a gap. Ask Phil if you're unsure. |
-| "I'll decide what the edge case should do." | Product decisions are Phil's. Ask, with a suggested default. |
+| "The plan should also do X." | If the goal doesn't need X, it's scope creep, not a gap. Ask the user if you're unsure. |
+| "I'll decide what the edge case should do." | Product decisions are the user's. Ask, with a suggested default. |
 | "The criterion is vague, but everyone knows what it means." | The code reviewer can't check "everyone knows". It's a BLOCKER. |

@@ -164,7 +164,7 @@
     { "action": "tool.use", "resource": "edit:*/.git/*", "effect": "deny" },
 
     // Merging, approving, marking pull requests ready, and raw API calls are
-    // Phil's. A draft pull request can't be merged, so drafts wait for him.
+    // the user's. A draft pull request can't be merged, so drafts wait for the user.
     { "action": "tool.use", "resource": "shell:gh pr merge *", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:gh pr review *", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:gh pr ready *", "effect": "deny" },

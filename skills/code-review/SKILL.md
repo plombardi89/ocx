@@ -34,7 +34,7 @@ Always use full 40-character SHAs from `git rev-parse`.
 
 - **Plan given:** read it in full. Write down each acceptance criterion; you will mark each one MET, NOT MET, or UNVERIFIED with evidence.
 - **No plan:** intent comes from the commit messages and the code. Spec verdict is NA. Do not invent requirements.
-- **ADRs:** read each ADR in `docs/adr/` that Base..Head adds or changes, or that the plan links, and no others. An accepted ADR is Phil's decision: don't report behavior it puts out of scope, and name the ADR wherever you rely on it. A proposed ADR isn't a decision yet: list it under "TODOs for Phil" as `ADR NNNN is proposed: <title>`.
+- **ADRs:** read each ADR in `docs/adr/` that Base..Head adds or changes, or that the plan links, and no others. An accepted ADR is the user's decision: don't report behavior it puts out of scope, and name the ADR wherever you rely on it. A proposed ADR isn't a decision yet: list it under "Open TODOs" as `ADR NNNN is proposed: <title>`.
 - **Round 2 or later:** read the previous verdict, including its harness code, with `git notes --ref=ocreview show <Previous review sha>`. Step 7 says how to check each earlier finding. You still review the whole range.
 
 ## 3. Read
@@ -128,7 +128,7 @@ Apply the `writing-style` skill to everything the change adds or modifies that p
 
 Report each clear break of the four writing rules as a WRITING finding: quote the text with its file and line, name the rule, and give a rewrite or "delete". Phrasing you would merely prefer, but that breaks no rule, is a NIT.
 
-List every TODO the change adds under "TODOs for Phil". Phil decides whether each is fixed or removed, and it blocks merging, not this review. A TODO that doesn't stand on its own (rule 1 or 2) is also a WRITING finding.
+List every TODO the change adds under "Open TODOs". The user decides whether each is fixed or removed, and it blocks merging, not this review. A TODO that doesn't stand on its own (rule 1 or 2) is also a WRITING finding.
 
 ## 9. Classify
 
@@ -140,14 +140,14 @@ List every TODO the change adds under "TODOs for Phil". Phil decides whether eac
 | MINOR | Maintainability or clarity outside the writing rules, small inefficiencies, missing docs on exported API. |
 | NIT | Style and preference. Never blocks. |
 
-**Guardrails for cooperative agents.** Some code exists to keep cooperative agents from making mistakes: review gates, permission rules, eval checks. When the change is such a guardrail, as its plan, commit messages, or the project's docs say, a way around it that only an agent deliberately trying to defeat it would use is at most MINOR: disguising a command, forging a record it's told never to write, or writing tests that lean on existing tests to inflate an eval's score. Report it so Phil can decide, but don't block on it. A gap an agent could hit through ordinary use keeps its full severity, and so does a security hole that real users or the network can reach.
+**Guardrails for cooperative agents.** Some code exists to keep cooperative agents from making mistakes: review gates, permission rules, eval checks. When the change is such a guardrail, as its plan, commit messages, or the project's docs say, a way around it that only an agent deliberately trying to defeat it would use is at most MINOR: disguising a command, forging a record it's told never to write, or writing tests that lean on existing tests to inflate an eval's score. Report it so the user can decide, but don't block on it. A gap an agent could hit through ordinary use keeps its full severity, and so does a security hole that real users or the network can reach.
 
 Every BLOCKER and MAJOR needs evidence: file and line, plus a failing input, a call sequence, or command output. Label it **executed** (you ran something that shows it) or **traced** (you followed the code by reading). BLOCKERs should be executed whenever a harness is feasible. Without evidence, downgrade to MINOR or move to "Could not verify". Every WRITING finding needs the quoted text, the rule, and a rewrite.
 
 ## 10. Decide
 
 1. **spec:** PASS if every acceptance criterion is MET; FAIL if any is NOT MET; NA when there is no plan. UNVERIFIED criteria with no counter-evidence count as MET only if you explain why.
-2. **quality:** in round 1, PASS if there are no BLOCKER, MAJOR, or WRITING findings. In round 2 and later, PASS if there are no BLOCKER findings and every BLOCKER, MAJOR, and WRITING finding from earlier rounds is resolved as step 7 says. Report new MAJOR and WRITING findings from round 2 on as usual, but they don't block: Phil decides on them, so each review converges instead of finding new edge cases every round. Otherwise FAIL.
+2. **quality:** in round 1, PASS if there are no BLOCKER, MAJOR, or WRITING findings. In round 2 and later, PASS if there are no BLOCKER findings and every BLOCKER, MAJOR, and WRITING finding from earlier rounds is resolved as step 7 says. Report new MAJOR and WRITING findings from round 2 on as usual, but they don't block: the user decides on them, so each review converges instead of finding new edge cases every round. Otherwise FAIL.
 3. **verdict:** APPROVE only if spec is not FAIL and quality is PASS. Otherwise REQUEST_CHANGES.
 
 ## 11. Clean up
@@ -186,7 +186,7 @@ The report follows the writing rules too. Your final message is exactly this str
    2. Rule: <1, 2, 3, or 4 and its name>
    3. Rewrite: <the rewritten text, or "delete">
 
-## TODOs for Phil
+## Open TODOs
 - `path/file.go:88`: `<the TODO text>`
 
 ## Claims in the request

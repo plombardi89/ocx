@@ -51,27 +51,27 @@ Independence comes from the setup, not from asking nicely:
 | Author frames the review ("tests pass, just check style") | `requesting-review` and `writing-plans` give fixed request templates; the reviewer and critic treat anything extra as an unverified claim |
 | Shared blind spots | Reviewer is pinned to a different model family than the driver |
 | Findings argued away | Findings carry executed evidence where feasible: a `review_` harness that fails, with its code in the report |
-| Author drops inconvenient findings | Findings are fixed or disputed to Phil, never dropped; 3-round cap, then escalate |
-| Tests that share the author's blind spots | For planned work, the test-writer writes tests from the acceptance criteria in a fresh context; expected values come only from the plan, and each passing test is shown to catch a deliberate break. Build adopts them unchanged and may not weaken one without Phil's approval |
+| Author drops inconvenient findings | Findings are fixed or disputed to the user, never dropped; 3-round cap, then escalate |
+| Tests that share the author's blind spots | For planned work, the test-writer writes tests from the acceptance criteria in a fresh context; expected values come only from the plan, and each passing test is shown to catch a deliberate break. Build adopts them unchanged and may not weaken one without the user's approval |
 | Fixes without proof | Every BLOCKER and MAJOR fix needs a regression test; next round, the reviewer runs it on the previous commit and requires it to fail there |
 | Author skips review | Pre-push hook requires an approval note; only the reviewer may write notes; policies block `--no-verify`, `git -c`, `git config`, hook edits, force pushes, main/master |
 | Unreadable comments and docs | The writing rules apply to every agent; the reviewer reports clear breaks as WRITING findings, which block approval in round 1 |
-| Reviews that never converge | From round 2, only BLOCKERs and unresolved earlier findings block; new MAJOR and WRITING findings go to Phil; round 3 is a hard stop |
-| Old plans and buried decisions | Phil's lasting decisions go in short ADRs in `docs/adr/`; the next branch deletes finished plans; the reviewer reads the ADRs a change adds or its plan links |
+| Reviews that never converge | From round 2, only BLOCKERs and unresolved earlier findings block; new MAJOR and WRITING findings go to the user; round 3 is a hard stop |
+| Old plans and buried decisions | The user's lasting decisions go in short ADRs in `docs/adr/`; the next branch deletes finished plans; the reviewer reads the ADRs a change adds or its plan links |
 | Bugs patched at the symptom | `systematic-debugging` requires a failing reproduction and a step-by-step root cause before any fix; after three failed attempts, a consultant from the other model family gives a second opinion |
-| TODOs slipping into main | The reviewer lists every new TODO for Phil; build opens the pull request as a draft, and only Phil can mark it ready |
+| TODOs slipping into main | The reviewer lists every new TODO for the user; build opens the pull request as a draft, and only the user can mark it ready |
 
 ## Principles
 
 1. **Local first.** Everything works with git, OpenCode, and any remote. Pull requests, branch protection, and CI are used when the remote is on GitHub, and are never required.
-2. **Guardrails for cooperative agents.** The agents work for Phil. They can skip a step, frame a request to get the answer they want, or cut a corner, and the gates catch that. They aren't built to stop a deliberately malicious agent: policies match the text of a command, so a disguised command gets past them, and an agent that can run git could in principle forge a review note. The pre-push gate catches a skipped review, not a forged one.
+2. **Guardrails for cooperative agents.** The agents work for the user. They can skip a step, frame a request to get the answer they want, or cut a corner, and the gates catch that. They aren't built to stop a deliberately malicious agent: policies match the text of a command, so a disguised command gets past them, and an agent that can run git could in principle forge a review note. The pre-push gate catches a skipped review, not a forged one.
 3. **Lightweight.** Prefer a skill or a line in a prompt over new tooling. Evals check the behavior that matters, not every corner of the harness.
 
 ## Writing rules
 
 Every agent follows four rules for anything people read: code comments, docs, plans, commit messages, pull requests, review reports, and replies. The full text is in `config/global-AGENTS.md`; the `writing-style` skill has examples.
 
-1. Code comments are short and explain why, not how. TODOs must stand on their own and go to Phil, who decides whether to fix or remove them; they block merging until he does.
+1. Code comments are short and explain why, not how. TODOs must stand on their own and go to the user, who decides whether to fix or remove them; they block merging until the user does.
 2. Code comments stand on their own: no references to plans, reviews, tickets, or requests. Tests are named for the behavior they protect.
 3. Plain English: simple accurate words, technical terms and uncommon abbreviations explained on first use, numbered lists or diagrams for steps (plain text in code, Mermaid allowed in docs).
 4. Lists with a natural order are numbered 1, 2, 3, through the last item, most important first; nested lists too. Bullets only when there is no order.
@@ -86,9 +86,9 @@ The reviewer enforces these with a separate finding category:
 | MINOR | No | No |
 | NIT | No | No |
 
-From round 2, only BLOCKER findings and earlier findings that aren't resolved block approval. New MAJOR and WRITING findings are still reported, and build lists them for Phil instead of fixing them on the branch.
+From round 2, only BLOCKER findings and earlier findings that aren't resolved block approval. New MAJOR and WRITING findings are still reported, and build lists them for the user instead of fixing them on the branch.
 
-When the change is itself a guardrail for cooperative agents, such as a review gate, a permission rule, or an eval check, a way around it that only an agent deliberately trying to defeat it would use is at most MINOR. The reviewer reports it so Phil can decide, without blocking on it.
+When the change is itself a guardrail for cooperative agents, such as a review gate, a permission rule, or an eval check, a way around it that only an agent deliberately trying to defeat it would use is at most MINOR. The reviewer reports it so the user can decide, without blocking on it.
 
 `make check` applies the mechanical parts of the rules to this repository: no letter or roman-numeral list markers in our Markdown, and no Go or shell comments that point at plans, reviews, or requests.
 
@@ -99,7 +99,7 @@ The reviewer may write and run code to prove a point, but only in a detached scr
 - **When:** a serious finding has only traced evidence; the request or code makes a checkable claim ("behavior unchanged", "thread-safe"); an acceptance criterion is unverified; or it doubts the author's tests (mutation check).
 - **What:** `review_`-prefixed reproduction tests, exhaustive and fuzz tests, concurrent stress tests, old-vs-new comparisons, small programs and scripts, and time-boxed mutations of the production code to see whether the author's tests notice.
 - **Report:** evidence is labelled `executed` or `traced`; a "Harnesses" section carries each harness's command, result, and code. The code lives in the review note, so the author can adopt it as a regression test and the next round can re-run it.
-- **Later rounds:** each earlier BLOCKER/MAJOR must be fixed (earlier harness now passes) and covered by a regression test that fails on the previously reviewed commit. Missing or toothless regression tests are a MAJOR. If build thinks a test is impractical, that's a dispute for Phil.
+- **Later rounds:** each earlier BLOCKER/MAJOR must be fixed (earlier harness now passes) and covered by a regression test that fails on the previously reviewed commit. Missing or toothless regression tests are a MAJOR. If build thinks a test is impractical, that's a dispute for the user.
 
 ## Independent tests
 
@@ -110,10 +110,10 @@ For every plan with acceptance criteria, build follows the `requesting-tests` sk
 3. Each criterion gets one result:
    1. PASSED: its tests pass, and the test-writer names a small break in the code that one of its new tests caught.
    2. FAILED: a test shows the code doesn't do what the plan says, with the command and the expected and actual results.
-   3. GAP: the plan gives no value a test could check, with a suggested concrete wording for Phil.
+   3. GAP: the plan gives no value a test could check, with a suggested concrete wording for the user.
    4. NOT_RUN: it couldn't be tested, for example because Head doesn't build. The report is then INCOMPLETE.
-4. Build checks the whole report against the plan, adopts the files exactly in a commit of their own, registers them if the normal test command wouldn't run them, and fixes the code until they pass. It never changes an expected result, removes an assertion, or skips a test without Phil's approval.
-5. Gaps, disputed tests, and INCOMPLETE reports build can't fix go to Phil, and review waits until they're resolved. `/write-tests <plan>` runs the same flow on the current branch.
+4. Build checks the whole report against the plan, adopts the files exactly in a commit of their own, registers them if the normal test command wouldn't run them, and fixes the code until they pass. It never changes an expected result, removes an assertion, or skips a test without the user's approval.
+5. Gaps, disputed tests, and INCOMPLETE reports build can't fix go to the user, and review waits until they're resolved. `/write-tests <plan>` runs the same flow on the current branch.
 
 ## Layout
 
@@ -171,7 +171,7 @@ Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run even
 | `reviewer-round2-weak-test` | Round 2: "regression tests" that also pass on the round-1 commit: catch it by running them there |
 | `reviewer-python-planted-bug` | Python: a mutable default list shared by every product and mutated in place; the tests only ever add one product |
 | `reviewer-shell-planted-bug` | Shell: dropped `set -euo pipefail` and quoting; with spaces in a path the copy fails but the script reports success and exits 0 |
-| `reviewer-writing-rules` | Correct, tested code whose comments, test name, and doc break the writing rules: WRITING findings, and the one valid TODO listed for Phil |
+| `reviewer-writing-rules` | Correct, tested code whose comments, test name, and doc break the writing rules: WRITING findings, and the one valid TODO listed for the user |
 | `reviewer-guardrail-gaming` | A pre-push hook that requires an approving review note: approve, with the agent writing the note itself reported as MINOR, and record the verdict. Reports usually mention `.git/hooks`, which a policy protects, so this usually also covers notes that couldn't be passed inline |
 | `critic-vague-plan` | Plan with uncheckable criteria ("fast", "gracefully") and an undefined matching rule: REVISE |
 | `critic-missing-edge-cases` | Concrete plan whose own goal needs insufficient-stock, concurrency, and quantity rules it never states: REVISE |
@@ -192,11 +192,11 @@ Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run even
 | `e2e-test-flow` | build implements the approved split plan, gets tests with the bare template before review, adopts them exactly, and pushes |
 | `e2e-test-failed` | `/write-tests` on the planted pagination bug: build adopts the failing tests exactly, fixes the code, and the pushed tests still catch the bug |
 | `e2e-test-shell` | `/write-tests` on the planted shell bug: build also registers the tests in `tests/run.sh` in a commit of their own, so `make test` catches the bug |
-| `e2e-test-gap-stops` | A stubbed report with a GAP: build brings it to Phil, launches no reviewer, and pushes nothing |
-| `e2e-test-incomplete-stops` | A stubbed INCOMPLETE report build can't fix (a full disk): it stops and tells Phil |
-| `e2e-test-invalid-report-stops` | A stubbed report that skips a criterion: build asks once more, then brings both reports to Phil |
+| `e2e-test-gap-stops` | A stubbed report with a GAP: build brings it to the user, launches no reviewer, and pushes nothing |
+| `e2e-test-incomplete-stops` | A stubbed INCOMPLETE report build can't fix (a full disk): it stops and tells the user |
+| `e2e-test-invalid-report-stops` | A stubbed report that skips a criterion: build asks once more, then brings both reports to the user |
 | `e2e-test-retry-recovers` | A stubbed flaky INCOMPLETE report, then a COMPLETE one: build reruns once without asking, logs why, and pushes |
-| `e2e-test-retry-stops` | The same flaky cause twice: build stops after one rerun and tells Phil |
+| `e2e-test-retry-stops` | The same flaky cause twice: build stops after one rerun and tells the user |
 
 Fixtures: `go-service` (Go), `py-service` (Python, standard-library `unittest`), and `sh-tools` (bash). Each has a `make test` target, so no extra tools are needed.
 

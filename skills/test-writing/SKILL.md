@@ -52,7 +52,7 @@ If the plan isn't there, or has no numbered acceptance criteria, return an INCOM
 For each criterion, write down the inputs and the expected results the plan states.
 
 - **Testable:** every value a test needs to check the criterion is in the plan, such as `limit=500 returns at most 100 items`. Write tests for it.
-- **GAP:** checking it needs a value the plan doesn't give, such as "responds quickly" or "handles invalid input" without saying how. Write no test for it. Suggest a concrete wording Phil could approve, such as "responds within 200 ms for 10,000 products".
+- **GAP:** checking it needs a value the plan doesn't give, such as "responds quickly" or "handles invalid input" without saying how. Write no test for it. Suggest a concrete wording the user could approve, such as "responds within 200 ms for 10,000 products".
 
 Expected values come only from the plan. Never run the code to find out what it returns and then assert that. If the plan doesn't say, it's a GAP.
 
@@ -117,7 +117,7 @@ Return the report as your final message.
 
 ## Plan gaps
 
-1. Criterion <n>: <what's missing>. Suggested wording: "<a concrete criterion Phil could approve>"
+1. Criterion <n>: <what's missing>. Suggested wording: "<a concrete criterion the user could approve>"
 
 ## Test files
 
