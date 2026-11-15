@@ -10,10 +10,10 @@ Match the paperwork to the size of the work.
 | Work | Artifact |
 | --- | --- |
 | Fits in one sitting | None. The commit message is the record. |
-| Several steps or sessions | A plan: `docs/plans/NNNN-<slug>.md` |
-| A decision that should outlive the feature | A decision record: `docs/decisions/NNNN-<slug>.md` |
+| Several steps or sessions | A plan: `docs/plans/NNNN-<slug>.md`, deleted once the work has merged |
+| A decision of Phil's that should outlive the work | An architecture decision record (ADR): `docs/adr/NNNN-<slug>.md` |
 
-`NNNN` is the next free four-digit number in that directory, starting at `0001`. The slug is short kebab-case.
+`NNNN` is the next four-digit number never used in that directory, starting at `0001`; check `git log --name-only` for deleted files too. The slug is short kebab-case.
 
 ## What a plan is
 
@@ -75,13 +75,17 @@ Create the feature branch (see the `git-workflow` skill), commit the plan as the
 
 When every task is implemented and committed, get independent tests for the acceptance criteria with the `requesting-tests` skill, then request review with the `requesting-review` skill.
 
-When the work is done, set `Status: done` and leave the file in place.
+When the work is done, set `Status: done`.
 
-## Decision records
+## Clean up finished plans
 
-Copy `templates/decision.md`. Keep it short: context, the decision, the alternatives considered, and the consequences. Write one when a choice constrains future work, such as a library, data format, protocol, or architectural boundary, and link it from the plan.
+Old plans fill agents' context without helping, so they don't stay. When you start new work, check `docs/plans/` first. In the new branch's first commit, delete every plan whose work has merged, after writing its lasting decisions as ADRs. Git history keeps the plan.
 
-Never rewrite an accepted decision. Supersede it with a new record and mark the old one `Superseded by NNNN`.
+## ADRs
+
+Copy `templates/adr.md` and keep it short: the context, the decision, the alternatives considered, and the consequences. Write one for each decision of Phil's that should outlive the work: an answer to a plan's open question that constrains later work, a scope ruling during review, or a settled dispute. Write it on the branch where he decides, with `Status: accepted`, and link it from the plan if there is one. You may draft one with `Status: proposed` for Phil to accept; it isn't a decision until he does.
+
+An accepted ADR is never edited. When a decision changes, write a new ADR that names the old one in `Replaces:`, and delete the old one in the same commit, so `docs/adr/` holds only the decisions in force.
 
 ## Red flags
 

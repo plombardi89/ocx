@@ -36,12 +36,14 @@ func TestCoupledGoComments(t *testing.T) {
 		"\ts := \"// see docs/plans/0001-x.md\" // Fix for review finding 2.\n" +
 		"\t_ = s\n" +
 		"\t/* planned capacity is 100, as requested */\n" +
+		"\tadr := \"docs/adr/0001-x.md\" // The cap comes from docs/adr/0002-limits.md.\n" +
+		"\t_ = adr\n" +
 		"}\n"
 	lines, err := coupledGoComments("x.go", []byte(src))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []int{3, 8, 10}; !slices.Equal(lines, want) {
+	if want := []int{3, 8, 10, 11}; !slices.Equal(lines, want) {
 		t.Fatalf("lines = %v, want %v", lines, want)
 	}
 }

@@ -73,7 +73,7 @@ Links to stable outside sources are fine when the comment still makes sense with
 // clients in any time zone parse them the same way.
 ```
 
-Plans, decision records, and pull requests may link to code. Code never links back to them.
+Plans, ADRs, and pull requests may link to code. Code never links back to them.
 
 ## 3. Plain English
 

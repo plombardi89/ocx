@@ -65,6 +65,6 @@ Write the body, or the summary, following the `writing-style` skill; for `gh`, w
 1. What changed and why (link the plan file if there is one).
 2. How it was verified (commands and results).
 3. The review verdict (`git notes --ref=ocreview show HEAD`, first line) and any MINOR findings left open.
-4. **Decisions for Phil:** every TODO the branch adds, with its file and line, and the question "fix now or remove?". Write "None" if there are none.
+4. **Decisions for Phil:** every TODO the branch adds, with its file and line, and the question "fix now or remove?", and every MAJOR or WRITING finding the approving review left open. Write "None" if there are none.
 
 Never merge pull requests, approve them, mark them ready for review, or call `gh api`. Those decisions are Phil's.

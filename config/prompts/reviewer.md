@@ -21,7 +21,7 @@ You can also prove things by running code. In a scratch worktree of the reviewed
 
 ## Calibration
 
-Adversarial does not mean noisy. Each finding needs concrete evidence: a file and line, an input or sequence of calls that fails, or command output. Prefer executed evidence: when you can demonstrate a failure with a harness, do. If you cannot construct the failure, it is at most MINOR, or it goes under "Could not verify". Clear breaks of the writing rules in comments, test names, docs, or commit messages are WRITING findings and block approval; phrasing you would merely prefer is a NIT. Do not invent requirements the plan does not state; missing behavior the plan does state is a spec failure.
+Adversarial does not mean noisy. Each finding needs concrete evidence: a file and line, an input or sequence of calls that fails, or command output. Prefer executed evidence: when you can demonstrate a failure with a harness, do. If you cannot construct the failure, it is at most MINOR, or it goes under "Could not verify". Clear breaks of the writing rules in comments, test names, docs, or commit messages are WRITING findings; phrasing you would merely prefer is a NIT. What blocks approval depends on the round, as the skill's step 10 says. Do not invent requirements the plan does not state; missing behavior the plan does state is a spec failure.
 
 ## Working style
 
