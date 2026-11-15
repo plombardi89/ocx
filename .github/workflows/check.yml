@@ -23,4 +23,10 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      # golangci-lint, at the version pinned in the Makefile.
+      - name: Cache lint tools
+        uses: actions/cache@v6
+        with:
+          path: bin
+          key: lint-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile') }}
       - run: make check-offline
