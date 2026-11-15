@@ -227,8 +227,9 @@ func checkPaths(root string, changes []Change) error {
 
 // deleteFile deletes full, if it's still there, and then each parent
 // directory up to root that the deletion left empty. A directory that still
-// holds something, or is already gone, ends the cleanup; any other failure
-// is an error, so the caller keeps the list for a rerun.
+// holds something ends the cleanup. One that's already gone, because an
+// earlier run deleted it before failing higher up, doesn't. Any other
+// failure is an error, so the caller keeps the list for a rerun.
 func deleteFile(root, full string) error {
 	rel := func(p string) string {
 		r, _ := filepath.Rel(root, p)
@@ -239,10 +240,10 @@ func deleteFile(root, full string) error {
 	}
 	for dir := filepath.Dir(full); dir != root && strings.HasPrefix(dir, root+string(filepath.Separator)); dir = filepath.Dir(dir) {
 		err := os.Remove(dir)
-		if err == nil {
+		if err == nil || errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
-		if errors.Is(err, syscall.ENOTEMPTY) || errors.Is(err, syscall.EEXIST) || errors.Is(err, fs.ErrNotExist) {
+		if errors.Is(err, syscall.ENOTEMPTY) || errors.Is(err, syscall.EEXIST) {
 			break
 		}
 		return fmt.Errorf("delete the emptied directory %s: %w", rel(dir), err)

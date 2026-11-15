@@ -484,3 +484,45 @@ func TestAFailedDirectoryCleanupKeepsTheList(t *testing.T) {
 		})
 	}
 }
+
+func TestARetryFinishesACleanupThatFailedPartWay(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can remove directories regardless of permissions")
+	}
+	files := without(v1)
+	files["skills/old/references/nested/deep/notes.md"] = []byte("deep\n")
+	for _, op := range []string{"apply", "remove"} {
+		t.Run(op, func(t *testing.T) {
+			dir := t.TempDir()
+			mustApply(t, dir, files)
+			run := func() error {
+				var err error
+				if op == "apply" {
+					_, err = Apply(dir, without(files, "skills/old/SKILL.md", "skills/old/references/nested/deep/notes.md"), false)
+				} else {
+					_, err = Remove(dir, false)
+				}
+				return err
+			}
+			// The first run deletes the note and deep/, then can't delete
+			// the emptied nested/.
+			references := filepath.Join(dir, "skills", "old", "references")
+			if err := os.Chmod(references, 0o555); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(references, 0o755) })
+			if err := run(); err == nil || !strings.Contains(err.Error(), "skills/old/references/nested") {
+				t.Fatalf("first run: %v", err)
+			}
+			if err := os.Chmod(references, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := run(); err != nil {
+				t.Fatalf("retry: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "skills", "old")); !errors.Is(err, fs.ErrNotExist) {
+				t.Errorf("the retry left emptied directories behind under skills/old: %v", tree(t, filepath.Join(dir, "skills", "old")))
+			}
+		})
+	}
+}
