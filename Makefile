@@ -74,5 +74,5 @@ fmt: $(GOLANGCI_LINT) ## Format the Go code (gofumpt, goimports)
 	$(GOLANGCI_LINT) fmt
 
 $(GOLANGCI_LINT):
-	GOBIN=$(CURDIR)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	GOBIN="$(CURDIR)/bin" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	mv bin/golangci-lint $@
