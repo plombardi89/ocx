@@ -174,7 +174,23 @@
     { "action": "tool.use", "resource": "shell:mvn *deploy*", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:./mvnw *deploy*", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:gradle *publish*", "effect": "deny" },
-    { "action": "tool.use", "resource": "shell:./gradlew *publish*", "effect": "deny" }
+    { "action": "tool.use", "resource": "shell:./gradlew *publish*", "effect": "deny" },
+
+    // Agents have no business on the Windows C: drive, and WSL runs the
+    // programs there on the Windows host. These policies keep agents from
+    // reaching into /mnt/c from a project elsewhere. Inside a project opened
+    // under /mnt/c, OpenCode checks paths relative to the project, so the
+    // file tools and commands with relative paths work there. The directory
+    // statements cover the file tools, cd targets, and shell working
+    // directories. OpenCode doesn't check other paths in a shell command,
+    // so the text pattern blocks any command containing /mnt/c, whatever
+    // follows it. That also blocks lookalikes such as /mnt/cache, and text
+    // that only mentions the drive, such as a commit message; write it to a
+    // file and use git commit -F instead. They come last so that no
+    // exception above, such as git config --get, can lift them.
+    { "action": "tool.use", "resource": "external_directory:/mnt/c", "effect": "deny" },
+    { "action": "tool.use", "resource": "external_directory:/mnt/c/*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*/mnt/c*", "effect": "deny" }
   ],
 
   "agents": {
