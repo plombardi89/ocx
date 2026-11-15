@@ -2,7 +2,7 @@
 
 Status: in-progress
 Branch: feat/ocx-update
-Decisions: [0008](../adr/0008-ocx-apply-from-a-released-binary.md), replaced by a new ADR in task 4
+Decisions: [0009](../adr/0009-ocx-updates-itself.md)
 
 ## Goal
 
