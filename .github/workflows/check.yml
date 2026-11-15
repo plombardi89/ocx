@@ -23,7 +23,4 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      # Without shellcheck, ocx check falls back to a syntax check of the
-      # pre-push hook and only warns.
-      - run: shellcheck --version
       - run: make check-offline

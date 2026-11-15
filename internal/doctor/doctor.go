@@ -19,7 +19,6 @@ import (
 
 	"github.com/plombardi89/ocx/internal/check"
 	"github.com/plombardi89/ocx/internal/config"
-	"github.com/plombardi89/ocx/internal/hook"
 	"github.com/plombardi89/ocx/internal/install"
 )
 
@@ -192,33 +191,9 @@ func checkRepo(opts Options, repo string) []check.Result {
 		return []check.Result{result(prefix+"repository", []string{repo + " is not a git repository"})}
 	}
 	return []check.Result{
-		checkHook(opts.Root, top, prefix),
 		checkAgentsFile(top, prefix),
 		checkProtection(opts, top, prefix),
 	}
-}
-
-func checkHook(root, repo, prefix string) check.Result {
-	name := prefix + "pre-push review gate"
-	dir, err := output(10*time.Second, repo, "git", "rev-parse", "--git-path", "hooks")
-	if err != nil {
-		return result(name, []string{err.Error()})
-	}
-	if !filepath.IsAbs(dir) {
-		dir = filepath.Join(repo, dir)
-	}
-	installed, err := os.ReadFile(filepath.Join(dir, "pre-push"))
-	if err != nil || !bytes.Contains(installed, []byte(hook.Marker)) {
-		return result(name, []string{"not installed; run: make hook-install REPO=" + repo})
-	}
-	if fi, err := os.Stat(filepath.Join(dir, "pre-push")); err != nil || fi.Mode()&0o111 == 0 {
-		return result(name, []string{"installed but not executable; run: make hook-install REPO=" + repo})
-	}
-	current, err := os.ReadFile(filepath.Join(root, config.HookFile))
-	if err == nil && !bytes.Equal(installed, current) {
-		return warn(name, "out of date; run: make hook-install REPO="+repo)
-	}
-	return check.Result{Name: name, Status: check.Pass}
 }
 
 func checkAgentsFile(repo, prefix string) check.Result {

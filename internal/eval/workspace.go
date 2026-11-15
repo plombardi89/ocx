@@ -15,7 +15,6 @@ import (
 
 	"github.com/plombardi89/ocx/internal/config"
 	"github.com/plombardi89/ocx/internal/gitx"
-	"github.com/plombardi89/ocx/internal/hook"
 	"github.com/plombardi89/ocx/internal/stage"
 )
 
@@ -195,9 +194,6 @@ func Prepare(root string, s Scenario, dir string, opts stage.Options) (*Workspac
 		if _, err := gitx.Run(ws.Work, st...); err != nil {
 			return nil, err
 		}
-	}
-	if _, err := hook.Install(filepath.Join(root, config.HookFile), ws.Work); err != nil {
-		return nil, err
 	}
 	if s.Branch != "" && s.Branch != "main" {
 		if _, err := gitx.Run(ws.Work, "switch", "-q", "-c", s.Branch); err != nil {

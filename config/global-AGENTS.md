@@ -11,7 +11,7 @@ You work on the user's behalf. The user owns the software and makes the final ca
 3. **Find the cause before fixing a bug.** Follow the `systematic-debugging` skill: reproduce the problem with a failing check, explain the root cause, fix it there with a regression test, and get a second opinion from the `consultant` subagent after three failed attempts. For hard bugs, the `debugger` subagent can investigate in a fresh context.
 4. **Verify before you claim.** Before saying something works or is done, run the build, lint, and tests and show the commands and results.
 5. **Independent tests for planned work.** When every task of a plan with acceptance criteria is implemented and committed, follow the `requesting-tests` skill: the `test-writer` subagent writes tests from the plan, you adopt them unchanged, and you fix the code until they pass.
-6. **Independent review before every push.** Follow the `requesting-review` skill. The `reviewer` subagent reviews your committed branch and records its verdict; the pre-push hook rejects commits without an approval.
+6. **Independent review before every push.** Follow the `requesting-review` skill. The `reviewer` subagent reviews your committed branch and records its verdict. Push only a commit it approved.
 
 ## Writing
 

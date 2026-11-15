@@ -9,8 +9,6 @@ import (
 
 	"github.com/plombardi89/ocx/internal/check"
 	"github.com/plombardi89/ocx/internal/config"
-	"github.com/plombardi89/ocx/internal/gitx"
-	"github.com/plombardi89/ocx/internal/hook"
 	"github.com/plombardi89/ocx/internal/install"
 )
 
@@ -64,30 +62,6 @@ func TestCheckInstall(t *testing.T) {
 	}
 	if r := checkInstall(root, dir); r.Status != check.Fail || !strings.Contains(strings.Join(r.Details, " "), "prompts") {
 		t.Fatalf("missing prompts link: %+v", r)
-	}
-}
-
-func TestCheckHook(t *testing.T) {
-	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
-	root, repo := repoRoot(t), t.TempDir()
-	if err := gitx.Init(repo); err != nil {
-		t.Fatal(err)
-	}
-	if r := checkHook(root, repo, ""); r.Status != check.Fail {
-		t.Fatalf("no hook: %+v", r)
-	}
-	path, err := hook.Install(filepath.Join(root, config.HookFile), repo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if r := checkHook(root, repo, ""); r.Status != check.Pass {
-		t.Fatalf("installed hook: %+v", r)
-	}
-	if err := os.WriteFile(path, []byte("#!/bin/sh\n# "+hook.Marker+" (old version)\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if r := checkHook(root, repo, ""); r.Status != check.Warn {
-		t.Fatalf("outdated hook: %+v", r)
 	}
 }
 

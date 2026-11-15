@@ -5,7 +5,7 @@ description: Use when a change is committed and ready to leave the machine - bef
 
 # Requesting review
 
-Every push needs an approving review, from the `reviewer` subagent, of the exact commit being pushed. The reviewer runs on a different model family than you, starts with no context, and records its verdict as a git note. The pre-push hook rejects any commit without an approving note, and agents have no way around it.
+Every push needs an approving review, from the `reviewer` subagent, of the exact commit being pushed. The reviewer runs on a different model family than you, starts with no context, and records its verdict as a git note. Nothing stops you from pushing without one, so the rule depends on you.
 
 ## Before you request
 
@@ -56,15 +56,11 @@ MINOR and NIT findings: fix them if cheap, without regression tests; otherwise l
 
 **Round cap:** if round 3 still returns REQUEST_CHANGES, stop and escalate to the user with the outstanding findings. Do not start round 4.
 
-## When the push is rejected
-
-Read the hook's message. It means the commit has no approval, the approval is for a different commit, or the target is main/master. Fix the cause by requesting a review or pushing a feature branch. Never try to work around the hook.
-
 ## Red flags
 
 | Thought | Reality |
 | --- | --- |
-| "The reviewer is being pedantic; I'll push anyway." | The hook rejects it. Fix the finding or escalate it. |
+| "The reviewer is being pedantic; I'll push anyway." | Every push needs an approving review of that exact commit. Fix the finding or escalate it. |
 | "I'll mention the tests already pass to save time." | That is framing. Use the template, nothing else. |
 | "Tiny fix after approval; no need for another review." | New commit, no approval. Request round N+1. |
 | "I'll ask for a fresh review and see if it approves." | That's shopping for a verdict. Disagreements go to the user. |

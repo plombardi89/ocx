@@ -46,7 +46,7 @@ git push -u origin <type>/<slug>
 ```
 
 - Never push to `main` or `master`, force-push, delete remote branches, or use `--no-verify`. These are blocked for agents anyway.
-- If the hook rejects the push, read its message and fix the cause. Don't work around it.
+- If the push is rejected, for example by the provider's branch protection or the project's own hook, read the message and fix the cause. Don't work around it.
 - If the remote branch moved, stop and tell the user. A rebase creates new commits that need a new review.
 
 ## Pull requests

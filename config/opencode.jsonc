@@ -120,8 +120,10 @@
   "policies": [
     { "action": "tool.use", "resource": "shell:sudo *", "effect": "deny" },
 
-    // Never push to main/master, force-push, skip hooks, or delete remote refs.
-    // A pattern ending in " *" also matches without the trailing arguments.
+    // Never push to main/master, force-push, skip a project's hooks, or
+    // delete remote refs. The git provider's branch protection is what guards
+    // main; these stop an agent from trying. A pattern ending in " *" also
+    // matches without the trailing arguments.
     { "action": "tool.use", "resource": "shell:git push * main *", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git push * master *", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git push *:main *", "effect": "deny" },
@@ -141,30 +143,17 @@
     { "action": "tool.use", "resource": "shell:git push * :*", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git commit *--no-verify*", "effect": "deny" },
 
-    // Protect the review gate itself. Global options and environment
-    // variables can retarget any git command, which would slip past the
-    // command-name patterns above, so they're blocked outright.
-    { "action": "tool.use", "resource": "shell:git -c *", "effect": "deny" },
-    { "action": "tool.use", "resource": "shell:git -C *", "effect": "deny" },
-    { "action": "tool.use", "resource": "shell:git --git-dir*", "effect": "deny" },
-    { "action": "tool.use", "resource": "shell:git --work-tree*", "effect": "deny" },
-    { "action": "tool.use", "resource": "shell:git --namespace*", "effect": "deny" },
-    { "action": "tool.use", "resource": "shell:git --exec-path*", "effect": "deny" },
-    { "action": "tool.use", "resource": "shell:*GIT_DIR=*", "effect": "deny" },
-    { "action": "tool.use", "resource": "shell:*GIT_WORK_TREE=*", "effect": "deny" },
-    { "action": "tool.use", "resource": "shell:*GIT_CONFIG*", "effect": "deny" },
-    { "action": "tool.use", "resource": "shell:*GIT_NOTES_REF=*", "effect": "deny" },
-    { "action": "tool.use", "resource": "shell:*GIT_INDEX_FILE=*", "effect": "deny" },
+    // Git's configuration and internals are the user's: agents never change
+    // git config and never edit files under .git/.
     { "action": "tool.use", "resource": "shell:git config *", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git config --get *", "effect": "allow" },
     { "action": "tool.use", "resource": "shell:git config --list *", "effect": "allow" },
-    { "action": "tool.use", "resource": "shell:git update-ref *", "effect": "deny" },
-    { "action": "tool.use", "resource": "shell:*.git/hooks*", "effect": "deny" },
     { "action": "tool.use", "resource": "edit:.git/*", "effect": "deny" },
     { "action": "tool.use", "resource": "edit:*/.git/*", "effect": "deny" },
 
     // Merging, approving, marking pull requests ready, and raw API calls are
-    // the user's. A draft pull request can't be merged, so drafts wait for the user.
+    // the user's. A draft pull request can't be merged, so drafts wait for
+    // the user.
     { "action": "tool.use", "resource": "shell:gh pr merge *", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:gh pr review *", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:gh pr ready *", "effect": "deny" },
@@ -196,8 +185,8 @@
 
   "agents": {
     // Built-in coding agent: keep its prompt, add the write operations it owns.
-    // Pushes still need an approving review (pre-push hook) and are blocked
-    // from main/master by the policies above.
+    // Its working agreements require an approving review before each push,
+    // and the policies above block pushes to main/master.
     "build": {
       "permissions": [
         { "action": "shell", "resource": "git add *", "effect": "allow" },
