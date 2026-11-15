@@ -129,7 +129,6 @@ func TestANewADRReplacesADR0008AndDescribesUpdate(t *testing.T) {
 		t.Fatalf("%d ADRs name 0008 in Replaces: %v, want exactly one", len(replacing), replacing)
 	}
 	text := updReadText(t, "docs", "adr", replacing[0])
-	// The decisions ADR 0008 recorded, restated.
 	for _, want := range []string{
 		"ocx update", "OCX_RELEASE_URL",
 		"hooks", "branch protection", "--no-verify", "git note", "backups",
