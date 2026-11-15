@@ -24,8 +24,8 @@ OpenCode agents, skills, and commands, plus the `ocx` binary that installs them 
 - `tests/permissions.yaml`: permission probes
 - `evals/`: fixtures and scenarios; `evals/results/` is ignored by git
 - `ocx.go`: embeds the configuration into the binary
-- `cmd/ocx/`: the `ocx` binary (`apply`, `remove`, `version`); `internal/tools/eval/`: the eval tool behind `make eval`
-- `internal/`: the apply package, the checks (run as Go tests), and eval support
+- `cmd/ocx/`: the `ocx` binary (`apply`, `remove`, `update`, `version`); `internal/tools/eval/`: the eval tool behind `make eval`
+- `internal/`: the apply and update packages, the checks (run as Go tests), and eval support
 - `.github/workflows/release.yml`: builds `ocx` on every push to main and publishes it to the `latest` release
 - `.github/workflows/check.yml`: CI
 

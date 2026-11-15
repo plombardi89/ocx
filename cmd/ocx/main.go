@@ -20,11 +20,15 @@ const usage = `ocx - install the ocx agents, skills, and commands into OpenCode
 Usage:
   ocx apply [--dry-run] [--config-dir DIR]    install or upgrade the configuration this binary carries
   ocx remove [--dry-run] [--config-dir DIR]   remove what apply installed
+  ocx update [--check | --apply] [--config-dir DIR]
+                                              replace this binary with the latest release, and with
+                                              --apply install its configuration
   ocx version                                 print the commit this binary was built from
 
 The configuration directory defaults to $XDG_CONFIG_HOME/opencode, or
 ~/.config/opencode. Apply overwrites the files at the paths it writes and
-keeps no backups. To upgrade, get a newer ocx and run apply again.
+keeps no backups. To upgrade, run ocx update --apply. Set OCX_RELEASE_URL
+to download releases from somewhere other than GitHub.
 `
 
 func main() {
@@ -42,6 +46,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		err = runApply(args[1:], stdout)
 	case "remove":
 		err = runRemove(args[1:], stdout)
+	case "update":
+		err = runUpdate(args[1:], stdout, stderr)
 	case "version":
 		info, ok := debug.ReadBuildInfo()
 		fmt.Fprintln(stdout, version(info, ok))
@@ -51,11 +57,20 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stderr, usage)
 		return 2
 	}
-	if err != nil {
+	var status exitStatus
+	var usage usageError
+	switch {
+	case err == nil:
+		return 0
+	case errors.As(err, &status):
+		return int(status)
+	case errors.As(err, &usage):
+		fmt.Fprintln(stderr, "ocx:", err)
+		return 2
+	default:
 		fmt.Fprintln(stderr, "ocx:", err)
 		return 1
 	}
-	return 0
 }
 
 func flags(name string, args []string) (dir string, dryRun bool, err error) {
