@@ -20,8 +20,9 @@ import (
 
 func bytesReader(b []byte) io.Reader { return bytes.NewReader(b) }
 
-// Workspace is a throwaway project for one run: a work repository with the
-// review gate installed, and a bare origin it pushes to.
+// Workspace is a throwaway project for one run: a work repository, and a
+// bare origin it pushes to. A pre-push script in the work repository
+// records each push, so the checks can tell when it was made.
 type Workspace struct {
 	Dir    string
 	Work   string
@@ -195,6 +196,9 @@ func Prepare(root string, s Scenario, dir string, opts stage.Options) (*Workspac
 			return nil, err
 		}
 	}
+	if err := installPushRecorder(ws); err != nil {
+		return nil, err
+	}
 	if s.Branch != "" && s.Branch != "main" {
 		if _, err := gitx.Run(ws.Work, "switch", "-q", "-c", s.Branch); err != nil {
 			return nil, err
@@ -279,6 +283,38 @@ func (ws *Workspace) stub(agent string, reports []string) error {
 		return err
 	}
 	return os.WriteFile(prompt, []byte(fmt.Sprintf(stubPrompt, script)), 0o644)
+}
+
+// pushRecorder is the work repository's pre-push hook. It never rejects a
+// push: the agent must get a review before pushing on its own, as in a real
+// project, and the checks judge afterwards whether it did.
+const pushRecorder = `#!/bin/sh
+while read -r local_ref local_sha remote_ref _; do
+	[ -n "$local_ref" ] || continue
+	case "$local_sha" in *[!0]*) ;; *) continue ;; esac
+	note=$(git notes --ref=ocreview show "$local_sha" 2>/dev/null | head -n 1)
+	printf '%%s %%s %%s\n' "$local_sha" "$remote_ref" "$note" >>'%s'
+done
+exit 0
+`
+
+// PushLog is where the work repository's pre-push hook records each push:
+// the commit, the ref it updates, and the first line of the commit's review
+// note at that moment.
+func (ws *Workspace) PushLog() string { return filepath.Join(ws.Dir, "pushes.log") }
+
+func installPushRecorder(ws *Workspace) error {
+	hooks, err := gitx.Run(ws.Work, "rev-parse", "--git-path", "hooks")
+	if err != nil {
+		return err
+	}
+	if !filepath.IsAbs(hooks) {
+		hooks = filepath.Join(ws.Work, hooks)
+	}
+	if err := os.MkdirAll(hooks, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(hooks, "pre-push"), []byte(fmt.Sprintf(pushRecorder, ws.PushLog())), 0o755)
 }
 
 // applyCommits makes the scenario's commits on the current branch.

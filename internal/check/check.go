@@ -1,6 +1,6 @@
 // Package check validates the ocx sources: configuration, agents,
-// skills, commands, the review gate, eval scenarios, and (with OpenCode
-// available) the fully resolved permissions of every agent.
+// skills, commands, eval scenarios, and (with OpenCode available) the fully
+// resolved permissions of every agent.
 package check
 
 import (

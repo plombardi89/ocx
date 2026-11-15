@@ -1,6 +1,6 @@
 // Package doctor checks that ocx is installed and working: the global links,
 // what OpenCode actually loads, the tools agents rely on, and, for each
-// project repository, the review gate and branch protection.
+// project repository, its AGENTS.md and branch protection.
 package doctor
 
 import (
@@ -255,8 +255,9 @@ func checkProtection(opts Options, repo, prefix string) check.Result {
 }
 
 // protectionResult reports which of the recommended rules the default
-// branch lacks. GitHub protection is an extra on top of the local review
-// gate, so a missing rule is a warning, not a failure.
+// branch lacks. Agents' policies still block pushes to main, and private
+// repositories need a paid GitHub plan for rulesets, so a missing rule is a
+// warning, not a failure.
 func protectionResult(name, branch, slug string, have []string) check.Result {
 	var missing []string
 	for _, r := range requiredRules {

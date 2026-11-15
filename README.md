@@ -286,6 +286,18 @@ Sonnet is the same family as the Opus driver. The comparison rules only prefer a
 
 `make uninstall APPLY=1` removes the links and restores what install backed up.
 
+### Removing the old review hook
+
+Earlier versions installed a pre-push hook in each project, which rejected any push without an approving review. Pulling this version doesn't remove those copies. Run this in each project where you installed it. It removes the hook only if ocx installed it, and puts back the project's own hook if ocx had kept it aside:
+
+```sh
+hooks=$(git rev-parse --git-path hooks)
+if grep -q ocx-managed-hook "$hooks/pre-push" 2>/dev/null; then
+	rm "$hooks/pre-push"
+	if [ -f "$hooks/pre-push.local" ]; then mv "$hooks/pre-push.local" "$hooks/pre-push"; fi
+fi
+```
+
 ### What `make doctor` checks
 
 1. Every link is in place and points into this checkout.
