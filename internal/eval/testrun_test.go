@@ -61,10 +61,12 @@ const (
 const existingAddTest = "package calc\n\nimport \"testing\"\n\nfunc TestAddsTwoNumbers(t *testing.T) {\n\tif Add(2, 3) != 5 {\n\t\tt.Fatal(Add(2, 3))\n\t}\n}\n"
 
 func goRepo(t *testing.T, impl string) *Workspace {
+	t.Helper()
 	return goRepoWith(t, impl, existingAddTest)
 }
 
 func goRepoWith(t *testing.T, impl, existing string) *Workspace {
+	t.Helper()
 	return codeRepo(t, map[string]string{
 		"go.mod":            "module example.com/m\n\ngo 1.22\n",
 		"calc/calc.go":      impl,

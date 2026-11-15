@@ -29,8 +29,8 @@ func isTestFile(p string) bool {
 // build, if any.
 func (a *asserter) lastTestsReport() (TestsReport, bool) {
 	launches := a.dispatches("test-writer")
-	for i := len(launches) - 1; i >= 0; i-- {
-		out, _ := launches[i].State.Output.(string)
+	for _, launch := range slices.Backward(launches) {
+		out, _ := launch.State.Output.(string)
 		if r, ok := ParseTestsReport(out); ok {
 			return r, true
 		}
@@ -43,7 +43,7 @@ type commitChange struct{ Status, Path string }
 
 func commitChanges(repo, sha string) []commitChange {
 	var out []commitChange
-	for _, line := range strings.Split(gitOut(repo, "diff-tree", "--no-commit-id", "-r", "--name-status", "--root", sha), "\n") {
+	for line := range strings.SplitSeq(gitOut(repo, "diff-tree", "--no-commit-id", "-r", "--name-status", "--root", sha), "\n") {
 		fields := strings.Split(line, "\t")
 		if len(fields) < 2 {
 			continue
@@ -202,7 +202,7 @@ func (a *asserter) buildSide(e E2E, pushed []string) []Check {
 	if len(e.TestProseForbid) > 0 {
 		var hits []string
 		for _, r := range results {
-			for _, p := range strings.Split(gitOut(r.Repo, "diff", "--name-only", "--diff-filter=AM", a.ws.Base, r.Ref), "\n") {
+			for p := range strings.SplitSeq(gitOut(r.Repo, "diff", "--name-only", "--diff-filter=AM", a.ws.Base, r.Ref), "\n") {
 				if p == "" || !isTestFile(p) {
 					continue
 				}

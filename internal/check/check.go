@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -125,7 +126,7 @@ func checkModels(root string, cfg *config.Config, commands []config.Command, opt
 	for _, dir := range []string{"config", config.SkillsDir, config.CommandsDir, config.ScenariosDir, "tests"} {
 		_ = filepath.WalkDir(filepath.Join(root, dir), func(path string, d os.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
-				return nil
+				return nil //nolint:nilerr // A path that can't be read holds nothing to check; keep walking.
 			}
 			data, err := os.ReadFile(path)
 			if err == nil {
@@ -162,7 +163,7 @@ func availableModels() (map[string]bool, error) {
 		return nil, err
 	}
 	models := map[string]bool{}
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			models[line] = true
 		}
@@ -239,12 +240,7 @@ func checkPrompts(root, cfgPath string, cfg *config.Config) Result {
 }
 
 func hasRule(rules []perm.Rule, want perm.Rule) bool {
-	for _, r := range rules {
-		if r == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(rules, want)
 }
 
 func checkBaseline(cfg *config.Config) Result {
@@ -541,7 +537,7 @@ func checkOwnWriting(root string) Result {
 	visit := func(dir string, exts map[string]bool, check func(rel string, data []byte)) {
 		_ = filepath.WalkDir(filepath.Join(root, dir), func(path string, d os.DirEntry, err error) error {
 			if err != nil || d.IsDir() || !exts[filepath.Ext(path)] {
-				return nil
+				return nil //nolint:nilerr // A path that can't be read holds nothing to check; keep walking.
 			}
 			data, err := os.ReadFile(path)
 			if err == nil {
@@ -626,7 +622,7 @@ func Resolve(root string) (map[string]ResolvedAgent, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	if err := gitx.Init(dir); err != nil {
 		return nil, err
 	}

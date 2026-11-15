@@ -57,6 +57,7 @@ func TestDispatchChecks(t *testing.T) {
 // existing test that doesn't catch it, and whose origin has branch
 // feat/add with one commit per entry in commits.
 func pushedRepo(t *testing.T, commits ...map[string]string) *Workspace {
+	t.Helper()
 	return branchRepo(t, true, commits...)
 }
 
@@ -115,24 +116,40 @@ func TestBuildSideChecks(t *testing.T) {
 		e       E2E
 		want    []string
 	}{
-		{name: "adopted exactly, fixed, and still catching the bug", commits: adoptAndFix,
-			e: E2E{AdoptedExactly: true, Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."}, RegistrationCommit: []string{"calc/calc.go"}}},
-		{name: "adopted with a changed expectation", commits: []map[string]string{{test.Path: weakened.Content}, fix},
-			e: E2E{AdoptedExactly: true}, want: []string{"adopted the returned test files byte for byte"}},
-		{name: "adopted together with the fix", commits: []map[string]string{{test.Path: test.Content, "calc/calc.go": addCorrect}},
-			e: E2E{AdoptedExactly: true}, want: []string{"adopted the returned test files byte for byte"}},
-		{name: "weakened after adopting", commits: append(adoptAndFix, map[string]string{test.Path: weakened.Content}),
-			e: E2E{Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."}}, want: []string{"catches the original bug"}},
-		{name: "no report with files", commits: adoptAndFix, output: "no report",
-			e: E2E{AdoptedExactly: true}, want: []string{"the last test-writer report has test files"}},
-		{name: "no registration-only commit", commits: []map[string]string{{test.Path: test.Content, "calc/calc.go": addCorrect}},
-			e: E2E{RegistrationCommit: []string{"calc/calc.go"}}, want: []string{"a commit that changes only"}},
+		{
+			name: "adopted exactly, fixed, and still catching the bug", commits: adoptAndFix,
+			e: E2E{AdoptedExactly: true, Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."}, RegistrationCommit: []string{"calc/calc.go"}},
+		},
+		{
+			name: "adopted with a changed expectation", commits: []map[string]string{{test.Path: weakened.Content}, fix},
+			e: E2E{AdoptedExactly: true}, want: []string{"adopted the returned test files byte for byte"},
+		},
+		{
+			name: "adopted together with the fix", commits: []map[string]string{{test.Path: test.Content, "calc/calc.go": addCorrect}},
+			e: E2E{AdoptedExactly: true}, want: []string{"adopted the returned test files byte for byte"},
+		},
+		{
+			name: "weakened after adopting", commits: append(adoptAndFix, map[string]string{test.Path: weakened.Content}),
+			e: E2E{Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."}}, want: []string{"catches the original bug"},
+		},
+		{
+			name: "no report with files", commits: adoptAndFix, output: "no report",
+			e: E2E{AdoptedExactly: true}, want: []string{"the last test-writer report has test files"},
+		},
+		{
+			name: "no registration-only commit", commits: []map[string]string{{test.Path: test.Content, "calc/calc.go": addCorrect}},
+			e: E2E{RegistrationCommit: []string{"calc/calc.go"}}, want: []string{"a commit that changes only"},
+		},
 		{name: "something was pushed", commits: adoptAndFix, e: E2E{NoPush: true}, want: []string{"nothing pushed"}},
-		{name: "a pushed test named for the plan", commits: []map[string]string{{"calc/plan_test.go": "package calc\n\nimport \"testing\"\n\n// Covers criterion 2 of the plan.\nfunc TestAC2(t *testing.T) {}\n"}},
-			e: E2E{TestProseForbid: []string{`(?i)\bcriteri`, `AC\d`}}, want: []string{"test names and comments describe behavior"}},
-		{name: "a pushed file that mentions what it must", commits: adoptAndFix,
+		{
+			name: "a pushed test named for the plan", commits: []map[string]string{{"calc/plan_test.go": "package calc\n\nimport \"testing\"\n\n// Covers criterion 2 of the plan.\nfunc TestAC2(t *testing.T) {}\n"}},
+			e: E2E{TestProseForbid: []string{`(?i)\bcriteri`, `AC\d`}}, want: []string{"test names and comments describe behavior"},
+		},
+		{
+			name: "a pushed file that mentions what it must", commits: adoptAndFix,
 			e:    E2E{PushedFileMentions: []FileMention{{Path: "calc/calc.go", Pattern: `a \+ b`}, {Path: "calc/calc.go", Pattern: `a - b`}}},
-			want: []string{"mentions a - b"}},
+			want: []string{"mentions a - b"},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -199,7 +216,7 @@ func TestStubbedAgentAndUncommittedChanges(t *testing.T) {
 	}
 	var got []string
 	for range 3 {
-		cmd := exec.Command("bash", script)
+		cmd := exec.CommandContext(t.Context(), "bash", script)
 		cmd.Dir = ws.Work
 		out, err := cmd.Output()
 		if err != nil {
@@ -221,8 +238,10 @@ func TestChecksUseTheLocalBranchWhenNothingWasPushed(t *testing.T) {
 	dir := t.TempDir()
 	buggy := overlay(t, dir, "buggy", map[string]string{"calc/calc.go": addWrong})
 	test := goFile(goTest("TestAddingTwoAndThree", "2", "3", "5"))
-	e := E2E{AdoptedExactly: true, Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."},
-		RegistrationCommit: []string{"calc/calc.go"}, ApprovedIfPushed: true, NoPush: true}
+	e := E2E{
+		AdoptedExactly: true, Buggy: []string{buggy}, NormalTest: []string{"go", "test", "./..."},
+		RegistrationCommit: []string{"calc/calc.go"}, ApprovedIfPushed: true, NoPush: true,
+	}
 
 	ws := branchRepo(t, false, map[string]string{test.Path: test.Content}, map[string]string{"calc/calc.go": addCorrect})
 	a := &asserter{ws: ws, dir: dir, tr: &Transcript{Tools: []Part{launch("test-writer", "Test request", returnedReport(test))}}}

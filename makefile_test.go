@@ -25,10 +25,10 @@ func skipInNestedRun(t *testing.T) {
 	}
 }
 
-func requireTool(t *testing.T, name string) {
+func requireMake(t *testing.T) {
 	t.Helper()
-	if _, err := exec.LookPath(name); err != nil {
-		t.Skipf("%s isn't installed", name)
+	if _, err := exec.LookPath("make"); err != nil {
+		t.Skip("make isn't installed")
 	}
 }
 
@@ -76,7 +76,7 @@ func runIn(t *testing.T, dir string, env []string, timeout time.Duration, name s
 
 func dryRunMake(t *testing.T, target string, args ...string) commandResult {
 	t.Helper()
-	requireTool(t, "make")
+	requireMake(t)
 	return runIn(t, ".", makeEnv(), 2*time.Minute, "make", append([]string{"-n", target}, args...)...)
 }
 
@@ -125,7 +125,7 @@ func TestEvalTargetsDoNotRunThroughTheOcxBinary(t *testing.T) {
 // at an empty directory.
 func pinnedGoEnv(t *testing.T) []string {
 	t.Helper()
-	out, err := exec.Command("go", "env", "GOCACHE", "GOMODCACHE", "GOPATH").Output()
+	out, err := exec.CommandContext(t.Context(), "go", "env", "GOCACHE", "GOMODCACHE", "GOPATH").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func isolatedMakeEnv(t *testing.T) ([]string, string) {
 }
 
 func TestMakeEvalListsEveryScenario(t *testing.T) {
-	requireTool(t, "make")
+	requireMake(t)
 	env, _ := isolatedMakeEnv(t)
 	r := runIn(t, ".", env, 5*time.Minute, "make", "eval", "ARGS=--list")
 	if r.code != 0 {
@@ -187,7 +187,7 @@ func TestMakeEvalListsEveryScenario(t *testing.T) {
 }
 
 func TestMakeApplyInstallsIntoTheDirectoryGivenInARGS(t *testing.T) {
-	requireTool(t, "make")
+	requireMake(t)
 	env, home := isolatedMakeEnv(t)
 	cfg := filepath.Join(t.TempDir(), "opencode")
 
@@ -213,7 +213,7 @@ func TestMakeApplyInstallsIntoTheDirectoryGivenInARGS(t *testing.T) {
 }
 
 func TestMakeApplyPassesDryRunThroughAndWritesNothing(t *testing.T) {
-	requireTool(t, "make")
+	requireMake(t)
 	env, home := isolatedMakeEnv(t)
 	cfg := filepath.Join(t.TempDir(), "opencode")
 
@@ -233,7 +233,7 @@ func TestMakeApplyPassesDryRunThroughAndWritesNothing(t *testing.T) {
 }
 
 func TestMakeApplyWithoutARGSUsesTheDefaultDirectory(t *testing.T) {
-	requireTool(t, "make")
+	requireMake(t)
 	env, home := isolatedMakeEnv(t)
 	r := runIn(t, ".", env, 5*time.Minute, "make", "apply")
 	if r.code != 0 {
@@ -283,13 +283,13 @@ func copyCheckoutForMake(t *testing.T) string {
 			if err != nil {
 				return err
 			}
-			defer in.Close()
+			defer func() { _ = in.Close() }()
 			out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY, info.Mode().Perm())
 			if err != nil {
 				return err
 			}
 			if _, err := io.Copy(out, in); err != nil {
-				out.Close()
+				_ = out.Close()
 				return err
 			}
 			return out.Close()
@@ -304,7 +304,7 @@ func copyCheckoutForMake(t *testing.T) string {
 
 func TestMakeTestFailsWhenASkillHasNoName(t *testing.T) {
 	skipInNestedRun(t)
-	requireTool(t, "make")
+	requireMake(t)
 	copyDir := copyCheckoutForMake(t)
 	env := makeEnv(nestedRunEnv + "=1")
 
@@ -339,7 +339,7 @@ func TestMakeCheckRunsThePermissionProbesAgainstOpenCode(t *testing.T) {
 	if os.Getenv("OCX_TEST_OPENCODE") != "1" {
 		t.Skip("runs OpenCode, so it only runs under make check")
 	}
-	requireTool(t, "make")
+	requireMake(t)
 	copyDir := copyCheckoutForMake(t)
 
 	probes := filepath.Join(copyDir, "tests", "permissions.yaml")

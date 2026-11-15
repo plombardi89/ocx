@@ -297,7 +297,7 @@ func TestBothReleaseBinariesBuildWithoutCgoForTheirArchitecture(t *testing.T) {
 	for arch, machine := range map[string]elf.Machine{"amd64": elf.EM_X86_64, "arm64": elf.EM_AARCH64} {
 		t.Run(arch, func(t *testing.T) {
 			bin := filepath.Join(t.TempDir(), "ocx-linux-"+arch)
-			cmd := exec.Command("go", "build", "-trimpath", "-o", bin, "./cmd/ocx")
+			cmd := exec.CommandContext(t.Context(), "go", "build", "-trimpath", "-o", bin, "./cmd/ocx")
 			cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+arch)
 			if out, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("go build for linux/%s: %v\n%s", arch, err, out)
@@ -306,7 +306,7 @@ func TestBothReleaseBinariesBuildWithoutCgoForTheirArchitecture(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			if f.Machine != machine {
 				t.Errorf("machine = %v, want %v", f.Machine, machine)
 			}

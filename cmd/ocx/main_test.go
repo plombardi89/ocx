@@ -44,7 +44,7 @@ func TestVersionNamesTheBuild(t *testing.T) {
 // runs.
 func TestTheBuiltBinaryWorksOutsideTheCheckout(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "ocx")
-	build := exec.Command("make", "-s", "ocx", "OUT="+bin)
+	build := exec.CommandContext(t.Context(), "make", "-s", "ocx", "OUT="+bin)
 	build.Dir = filepath.Join("..", "..")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("make ocx: %v\n%s", err, out)
@@ -52,7 +52,7 @@ func TestTheBuiltBinaryWorksOutsideTheCheckout(t *testing.T) {
 	elsewhere := t.TempDir()
 	ocx := func(t *testing.T, env []string, args ...string) string {
 		t.Helper()
-		cmd := exec.Command(bin, args...)
+		cmd := exec.CommandContext(t.Context(), bin, args...)
 		cmd.Dir = elsewhere
 		cmd.Env = append(os.Environ(), env...)
 		out, err := cmd.CombinedOutput()
@@ -62,7 +62,7 @@ func TestTheBuiltBinaryWorksOutsideTheCheckout(t *testing.T) {
 		return string(out)
 	}
 
-	head, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	head, err := exec.CommandContext(t.Context(), "git", "rev-parse", "HEAD").Output()
 	if err != nil {
 		t.Fatal(err)
 	}

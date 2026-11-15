@@ -31,10 +31,10 @@ func Files() (map[string][]byte, error) {
 }
 
 func installPath(path string) string {
-	switch {
-	case path == "config/opencode.jsonc":
+	switch path {
+	case "config/opencode.jsonc":
 		return "opencode.jsonc"
-	case path == "config/global-AGENTS.md":
+	case "config/global-AGENTS.md":
 		return "AGENTS.md"
 	default:
 		return strings.TrimPrefix(path, "config/")

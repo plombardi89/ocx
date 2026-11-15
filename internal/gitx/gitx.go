@@ -5,6 +5,7 @@ package gitx
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,7 +29,7 @@ func Run(dir string, args ...string) (string, error) {
 
 // RunInput is Run with stdin.
 func RunInput(dir, input string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(context.Background(), "git", args...)
 	cmd.Dir = dir
 	cmd.Env = Env()
 	if input != "" {

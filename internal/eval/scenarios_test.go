@@ -151,8 +151,10 @@ func TestListReturnsAtMostOneHundredItems(t *testing.T) {
 	if _, err := gitx.CommitAll(ws.Work, "test: add tests for product pagination from its acceptance criteria"); err != nil {
 		t.Fatal(err)
 	}
-	r := report{status: "COMPLETE", criteria: 7, passed: 6, failed: 1, head: ws.Head,
-		results: []string{"1. PASSED", "2. PASSED", "3. FAILED", "4. PASSED", "5. PASSED", "6. PASSED", "7. PASSED"}, files: []TestFile{f}}
+	r := report{
+		status: "COMPLETE", criteria: 7, passed: 6, failed: 1, head: ws.Head,
+		results: []string{"1. PASSED", "2. PASSED", "3. FAILED", "4. PASSED", "5. PASSED", "6. PASSED", "7. PASSED"}, files: []TestFile{f},
+	}
 	a := &asserter{ws: ws, dir: s.Dir, tr: &Transcript{Tools: []Part{
 		launch("test-writer", "Test request", r.String()),
 		launch("reviewer", "Review request", ""),

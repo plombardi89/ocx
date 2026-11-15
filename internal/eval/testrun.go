@@ -26,7 +26,7 @@ func checkout(src, rev string, overlays []string) (repo string, cleanup func(), 
 	if err != nil {
 		return "", func() {}, err
 	}
-	cleanup = func() { os.RemoveAll(dir) }
+	cleanup = func() { _ = os.RemoveAll(dir) }
 	repo = filepath.Join(dir, "repo")
 	if _, err := gitx.Run(dir, "clone", "-q", "--no-checkout", src, repo); err != nil {
 		return "", cleanup, err
@@ -83,7 +83,7 @@ func runTests(src, rev string, overlays []string, files []TestFile, command []st
 // outside the checkout.
 func writablePath(repo, p string) (string, error) {
 	full := repo
-	for _, part := range strings.Split(p, "/") {
+	for part := range strings.SplitSeq(p, "/") {
 		full = filepath.Join(full, part)
 		fi, err := os.Lstat(full)
 		if errors.Is(err, os.ErrNotExist) {
@@ -111,7 +111,7 @@ func runCommand(dir string, name string, args ...string) (string, bool, error) {
 	if ctx.Err() != nil {
 		return buf.String(), true, fmt.Errorf("%s timed out", name)
 	}
-	if _, ok := err.(*exec.ExitError); ok {
+	if _, ok := errors.AsType[*exec.ExitError](err); ok {
 		return buf.String(), true, nil
 	}
 	return buf.String(), false, err

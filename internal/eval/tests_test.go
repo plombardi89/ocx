@@ -175,8 +175,10 @@ func TestTestsReportChecks(t *testing.T) {
 		{name: "a consistent report", report: func(*report) {}},
 		{name: "wrong head", report: func(r *report) { r.head = strings.Repeat("a", 40) }, fails: []string{"OCTESTS names head"}},
 		{name: "counts that don't add up", report: func(r *report) { r.passed = 2 }, fails: []string{"counts add up", "listed results match"}},
-		{name: "criteria count differs from the plan", report: func(r *report) { r.criteria, r.gap = 2, 0; r.results = r.results[:2] },
-			fails: []string{"criteria matches the plan", "each criterion listed once"}},
+		{
+			name: "criteria count differs from the plan", report: func(r *report) { r.criteria, r.gap = 2, 0; r.results = r.results[:2] },
+			fails: []string{"criteria matches the plan", "each criterion listed once"},
+		},
 		{name: "a criterion listed twice", report: func(r *report) { r.results = append(r.results, "3. GAP") }, fails: []string{"each criterion listed once"}},
 		{name: "a criterion the plan doesn't have", report: func(r *report) { r.results = append(r.results, "4. PASSED") }, fails: []string{"each criterion listed once"}},
 		{name: "sections out of order", report: func(r *report) {
@@ -228,10 +230,14 @@ func TestTestsReportChecks(t *testing.T) {
 		{name: "a shell heredoc that mentions the plan", report: func(r *report) {
 			r.files = []TestFile{{Path: "tests/heredoc_test.sh", Content: "test_reads_input() {\n\tcat <<EOF\n# plan\nEOF\n}\ntest_reads_input\n"}}
 		}, expect: TestsExpect{NameForbid: []string{`(?i)\bplan\b`}}},
-		{name: "a test-writer literal the behavior needs", report: func(*report) {},
-			expect: TestsExpect{NameForbid: []string{`(?i)test-writer`}}},
-		{name: "exact results", report: func(*report) {},
-			expect: TestsExpect{Results: map[int]string{2: "FAILED", 3: "PASSED"}}, fails: []string{"criterion 3 PASSED"}},
+		{
+			name: "a test-writer literal the behavior needs", report: func(*report) {},
+			expect: TestsExpect{NameForbid: []string{`(?i)test-writer`}},
+		},
+		{
+			name: "exact results", report: func(*report) {},
+			expect: TestsExpect{Results: map[int]string{2: "FAILED", 3: "PASSED"}}, fails: []string{"criterion 3 PASSED"},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

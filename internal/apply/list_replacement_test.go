@@ -2,6 +2,7 @@ package apply
 
 import (
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -18,9 +19,7 @@ var listTestFiles = map[string][]byte{
 
 func listTestMore() map[string][]byte {
 	out := map[string][]byte{"skills/b/SKILL.md": []byte("skill b\n")}
-	for k, v := range listTestFiles {
-		out[k] = v
-	}
+	maps.Copy(out, listTestFiles)
 	return out
 }
 
