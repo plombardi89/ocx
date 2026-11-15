@@ -55,7 +55,7 @@ None. The user decided on 2026-11-15:
 
 ## Tasks
 
-1. [ ] `internal/update` (criteria 1 to 6).
+1. [x] `internal/update` (criteria 1 to 6).
    - Done when: unit tests against an `httptest` server cover:
      1. Up to date, `--check` both ways, and a newer build.
      2. An HTTP 404, a download cut off part way, a download over the limit, and a timeout, using a short timeout in the test.
@@ -66,18 +66,18 @@ None. The user decided on 2026-11-15:
      7. The default release location, and a trailing slash in `OCX_RELEASE_URL`, without the public network.
 
      Each failure case checks that the old binary is unchanged and no temporary file is left.
-2. [ ] The `update` command in `cmd/ocx` (criteria 7 to 9).
+2. [x] The `update` command in `cmd/ocx` (criteria 7 to 9).
    - Done when: tests cover the usage errors in criterion 8, and a smoke test builds two binaries stamped with different versions and serves the newer one from an `httptest` server through `OCX_RELEASE_URL`. With the older one, it runs:
      1. `ocx update --apply --config-dir <temp>`, and checks that the binary file now reports the newer version, that the output includes `Applied <newer version>`, which the old binary can't print, and that the configuration was applied.
      2. `ocx update --apply` again, which is already up to date and still applies.
      3. `ocx update --apply`, from a fresh copy of the older binary, with a `--config-dir` that `apply` refuses: it replaces the binary, exits with `apply`'s status 1 and its message, and the installed file still reports the newer version afterwards.
 
      A unit test also serves a stand-in binary whose `version` succeeds and whose `apply` prints one line to standard output, another to standard error, and exits with status 7. `ocx update --apply` must pass both lines through unchanged and exit with status 7.
-3. [ ] Update the adopted usage test (criterion 9), and rename `TestOnlyThreeCommands` in `cmd/ocx/main_test.go` to `TestRemovedCommandsAreUsageErrors`, which is what it checks, without changing its assertions.
+3. [x] Update the adopted usage test (criterion 9), and rename `TestOnlyThreeCommands` in `cmd/ocx/main_test.go` to `TestRemovedCommandsAreUsageErrors`, which is what it checks, without changing its assertions.
    - Done when: both pass.
-4. [ ] A new ADR that replaces 0008 (criterion 10).
+4. [x] A new ADR that replaces 0008 (criterion 10).
    - Done when: ADR 0008 is deleted and the new one names it in `Replaces:`.
-5. [ ] README and this repository's `AGENTS.md` (criteria 9 and 11).
+5. [x] README and this repository's `AGENTS.md` (criteria 9 and 11).
    - Done when: `make check` passes.
 6. [ ] Independent tests, review, and pull request.
    - Done when: the reviewer approves the pushed commit.
@@ -88,3 +88,4 @@ None. The user decided on 2026-11-15:
 2. 2026-11-15: Critique round 1: REVISE (5 MAJOR, 1 WRITING, 1 MINOR). The user decided: two updates at once aren't supported; `ocx update` always installs the release's binary when it differs; and the new binary counts as working when `version` exits 0 within 10 seconds with at least one line, so its output can grow. Added a strict `SHA256SUMS` format, numbered the replacement steps, made failed `apply` behavior explicit, expanded the tests (a link to the binary, forwarded exit status, an already-current `--apply`, the old binary's `apply` not being used), and added the other command listings to the docs task.
 3. 2026-11-15: Critique round 2: REVISE (2 MAJOR), both about tests. Added tests for a failed write of the temporary file and a failed rename, and for `apply` failing right after a replacement, with a stand-in binary whose `apply` exits 7 to show its output and status pass through unchanged.
 4. 2026-11-15: The user approved the plan with round 2's test additions, without a third critique round.
+5. 2026-11-15: Tasks 1 to 5 done. The `update` command can't replace the test binary in its own tests, so they swap the path it replaces for a temporary file, and the smoke test runs real builds as separate processes. `run` now maps a usage error to exit status 2 and passes a child `apply`'s exit status through. `make check` and `make check-offline` pass.
