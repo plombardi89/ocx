@@ -183,6 +183,24 @@ probes:
   - { agent: build, action: subagent, resource: general, expect: deny }
   - { agent: build, action: external_directory, resource: "/etc/*", expect: ask }
 
+  # every agent: never the Windows C: drive; lookalike paths aren't blocked
+  - { agent: build, action: external_directory, resource: "/mnt/c/*", expect: deny }
+  - { agent: build, action: external_directory, resource: "/mnt/c", expect: deny }
+  - { agent: build, action: external_directory, resource: "/mnt/c/Program Files/Git/etc/*", expect: deny }
+  - { agent: build, action: external_directory, resource: "/mnt/cache/*", expect: ask }
+  - { agent: plan, action: external_directory, resource: "/mnt/c/Users/phil/*", expect: deny }
+  - { agent: explore, action: external_directory, resource: "/mnt/c/Users/phil/*", expect: deny }
+  - { agent: general, action: external_directory, resource: "/mnt/c/Users/phil/*", expect: deny }
+  - { agent: build, action: shell, resource: "ls /mnt/c", expect: deny }
+  - { agent: build, action: shell, resource: "cat /mnt/c/Windows/win.ini", expect: deny }
+  - { agent: build, action: shell, resource: "ls \"/mnt/c/Program Files\"", expect: deny }
+  - { agent: build, action: shell, resource: "/mnt/c/Windows/System32/cmd.exe /c ver", expect: deny }
+  - { agent: build, action: shell, resource: "cp notes.txt /mnt/c/Users/phil/", expect: deny }
+  - { agent: plan, action: shell, resource: "ls /mnt/c/Users", expect: deny }
+  - { agent: explore, action: shell, resource: "ls /mnt/c/Users", expect: deny }
+  - { agent: general, action: shell, resource: "ls /mnt/c/Users", expect: deny }
+  - { agent: build, action: shell, resource: "ls /mnt/cache", expect: allow }
+
   # other built-ins: no pushing, committing, or verdict notes
   - { agent: plan, action: shell, resource: "git push -u origin feat/x", expect: deny }
   - { agent: plan, action: shell, resource: "git commit -m x", expect: deny }

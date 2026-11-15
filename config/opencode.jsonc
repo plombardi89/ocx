@@ -119,6 +119,18 @@
   "policies": [
     { "action": "tool.use", "resource": "shell:sudo *", "effect": "deny" },
 
+    // Agents have no business on the Windows C: drive, and WSL runs the
+    // programs there on the Windows host. The directory statements cover
+    // the file tools, cd targets, and shell working directories. OpenCode
+    // doesn't check other paths in a shell command, so the text patterns
+    // cover those. They also block text that only mentions such a path,
+    // such as a commit message in a heredoc; write it to a file and use
+    // git commit -F instead.
+    { "action": "tool.use", "resource": "external_directory:/mnt/c", "effect": "deny" },
+    { "action": "tool.use", "resource": "external_directory:/mnt/c/*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*/mnt/c/*", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:*/mnt/c *", "effect": "deny" },
+
     // Never push to main/master, force-push, skip hooks, or delete remote refs.
     // A pattern ending in " *" also matches without the trailing arguments.
     { "action": "tool.use", "resource": "shell:git push * main *", "effect": "deny" },
