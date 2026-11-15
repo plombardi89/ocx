@@ -125,11 +125,19 @@ func report(out io.Writer, changes []apply.Change) {
 	}
 }
 
+// commit is set with -ldflags "-X main.commit=..." by make ocx and make
+// apply, because Go doesn't record the commit when it builds in a git
+// worktree.
+var commit string
+
 // version names the commit the binary was built from: the checkout's
 // commit, marked when it had uncommitted changes, or the module version for
 // a go install build.
 func version(info *debug.BuildInfo, ok bool) string {
 	if !ok {
+		if commit != "" {
+			return commit
+		}
 		return "unknown"
 	}
 	revision, modified := "", false
@@ -146,6 +154,9 @@ func version(info *debug.BuildInfo, ok bool) string {
 			revision += "-modified"
 		}
 		return revision
+	}
+	if commit != "" {
+		return commit
 	}
 	if v := info.Main.Version; v != "" && v != "(devel)" {
 		return v

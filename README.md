@@ -157,6 +157,7 @@ internal/                 the apply package, the checks, and the eval tool behin
 | `make bakeoff` | One tag's comparison scenarios × `BAKEOFF_MODELS` × `REPS` (`TAG=reviewer`, `critic`, `debug`, or `tests`) | tokens |
 | `make verify` | `check` + every eval: the single "is everything good?" entrypoint | tokens |
 | `make eval ARGS="--scenario <name>"` | One scenario, or `--list` to list them | tokens |
+| `make ocx OUT=…` | Build `ocx` from this checkout, stamped with its commit, and print its path | — |
 | `make apply` | Build `ocx` from this checkout and run `ocx apply`, to try a branch on purpose (`ARGS="--dry-run"` or `ARGS="--config-dir DIR"`) | — |
 
 Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run event streams, session exports, and final reports). Failing runs keep their workspace under `/tmp/opencode/ocx-eval/` for inspection.

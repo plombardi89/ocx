@@ -29,15 +29,25 @@ func TestVersionNamesTheBuild(t *testing.T) {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
 	}
+
+	// A build in a git worktree, where Go records no commit, stamped by the
+	// Makefile instead.
+	commit = sha + "-modified"
+	defer func() { commit = "" }()
+	if got := version(&debug.BuildInfo{Main: debug.Module{Version: "(devel)"}}, true); got != sha+"-modified" {
+		t.Errorf("a stamped worktree build: got %q", got)
+	}
 }
 
-// TestTheBuiltBinaryWorksOutsideTheCheckout builds ocx and runs it from an
-// unrelated directory, the way a downloaded binary runs.
+// TestTheBuiltBinaryWorksOutsideTheCheckout builds ocx the way make apply
+// does and runs it from an unrelated directory, the way a downloaded binary
+// runs.
 func TestTheBuiltBinaryWorksOutsideTheCheckout(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "ocx")
-	build := exec.Command("go", "build", "-o", bin, ".")
+	build := exec.Command("make", "-s", "ocx", "OUT="+bin)
+	build.Dir = filepath.Join("..", "..")
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
+		t.Fatalf("make ocx: %v\n%s", err, out)
 	}
 	elsewhere := t.TempDir()
 	ocx := func(t *testing.T, env []string, args ...string) string {
@@ -52,10 +62,12 @@ func TestTheBuiltBinaryWorksOutsideTheCheckout(t *testing.T) {
 		return string(out)
 	}
 
-	// Go records the commit only in a regular checkout, not in a git
-	// worktree, so a build from a worktree reports "unknown".
-	if v := strings.TrimSpace(ocx(t, nil, "version")); !regexp.MustCompile(`^([0-9a-f]{40}(-modified)?|unknown)$`).MatchString(v) {
-		t.Errorf("version = %q", v)
+	head, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := strings.TrimSpace(ocx(t, nil, "version")); !regexp.MustCompile(`^` + strings.TrimSpace(string(head)) + `(-modified)?$`).MatchString(v) {
+		t.Errorf("version = %q, want the checkout's commit", v)
 	}
 	installed := []string{"opencode.jsonc", "AGENTS.md", "prompts/reviewer.md", "skills/code-review/SKILL.md", "commands/plan.md", ".ocx-files"}
 	cases := []struct {

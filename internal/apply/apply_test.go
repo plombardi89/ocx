@@ -379,3 +379,108 @@ func TestConfigDirFollowsXDGConfigHome(t *testing.T) {
 		t.Fatalf("got %s", got)
 	}
 }
+
+func TestTheListAndItsTemporaryFileFollowTheSameRules(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, dir, outside string)
+		ops   []string
+		want  string
+	}{
+		{"a link at the list", func(t *testing.T, dir, outside string) {
+			if err := os.Remove(filepath.Join(dir, ListFile)); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(filepath.Join(outside, "keep.md"), filepath.Join(dir, ListFile)); err != nil {
+				t.Fatal(err)
+			}
+		}, []string{"apply", "remove"}, ListFile + " is a link"},
+		{"a link at the temporary list", func(t *testing.T, dir, outside string) {
+			if err := os.Symlink(filepath.Join(outside, "keep.md"), filepath.Join(dir, listTemp)); err != nil {
+				t.Fatal(err)
+			}
+		}, []string{"apply", "remove"}, listTemp + " is a link"},
+		{"a directory at the temporary list", func(t *testing.T, dir, outside string) {
+			if err := os.Mkdir(filepath.Join(dir, listTemp), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}, []string{"apply", "remove"}, listTemp + " is a directory"},
+	}
+	for _, c := range cases {
+		for _, op := range c.ops {
+			t.Run(c.name+"/"+op, func(t *testing.T) {
+				dir, outside := t.TempDir(), t.TempDir()
+				mustApply(t, dir, without(v1, "AGENTS.md"))
+				if err := os.WriteFile(filepath.Join(outside, "keep.md"), []byte("keep outside\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				c.setup(t, dir, outside)
+				before := tree(t, dir)
+				var err error
+				if op == "apply" {
+					_, err = Apply(dir, v1, false)
+				} else {
+					_, err = Remove(dir, false)
+				}
+				if err == nil || !strings.Contains(err.Error(), c.want) {
+					t.Fatalf("err = %v, want %q", err, c.want)
+				}
+				if got, _ := os.ReadFile(filepath.Join(outside, "keep.md")); string(got) != "keep outside\n" {
+					t.Fatalf("the file outside changed to %q", got)
+				}
+				after := tree(t, dir)
+				if len(after) != len(before) {
+					t.Fatalf("the directory changed:\n%v\n%v", before, after)
+				}
+				for k, v := range before {
+					if after[k] != v {
+						t.Errorf("%s changed", k)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestAFailedDirectoryCleanupKeepsTheList(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can remove directories regardless of permissions")
+	}
+	for _, op := range []string{"apply", "remove"} {
+		t.Run(op, func(t *testing.T) {
+			dir := t.TempDir()
+			mustApply(t, dir, v1)
+			before := list(t, dir)
+			// skills/old can still lose its file, but skills can't lose the
+			// emptied skills/old.
+			skills := filepath.Join(dir, "skills")
+			if err := os.Chmod(skills, 0o555); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(skills, 0o755) })
+			var err error
+			if op == "apply" {
+				_, err = Apply(dir, without(v1, "skills/old/SKILL.md"), false)
+			} else {
+				_, err = Remove(dir, false)
+			}
+			if err == nil || !strings.Contains(err.Error(), "delete the emptied directory skills/") {
+				t.Fatalf("err = %v, want a failure to delete an emptied skill directory", err)
+			}
+			if got := list(t, dir); got != before {
+				t.Fatalf("the list changed to %q", got)
+			}
+			if err := os.Chmod(skills, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if op == "apply" {
+				mustApply(t, dir, without(v1, "skills/old/SKILL.md"))
+			} else if _, err := Remove(dir, false); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(filepath.Join(skills, "old")); !errors.Is(err, fs.ErrNotExist) {
+				t.Errorf("a rerun left skills/old behind: %v", err)
+			}
+		})
+	}
+}

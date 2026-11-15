@@ -39,13 +39,16 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      # The binaries go outside the checkout: a file inside it would mark
+      # the next build as made from a modified tree.
       - name: Build
         run: |
-          mkdir dist
+          dist="$RUNNER_TEMP/dist"
+          mkdir "$dist"
           for arch in amd64 arm64; do
-            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -o "dist/ocx-linux-$arch" ./cmd/ocx
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -o "$dist/ocx-linux-$arch" ./cmd/ocx
           done
-          cd dist && sha256sum ocx-linux-amd64 ocx-linux-arm64 > SHA256SUMS
+          cd "$dist" && sha256sum ocx-linux-amd64 ocx-linux-arm64 > SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -58,6 +61,7 @@ jobs:
           if ! gh release view latest >/dev/null 2>&1; then
             gh release create latest --target "$GITHUB_SHA" --title latest --notes "Publishing $GITHUB_SHA"
           fi
-          gh release upload latest dist/ocx-linux-amd64 dist/ocx-linux-arm64 dist/SHA256SUMS --clobber
+          dist="$RUNNER_TEMP/dist"
+          gh release upload latest "$dist/ocx-linux-amd64" "$dist/ocx-linux-arm64" "$dist/SHA256SUMS" --clobber
           git push --force origin "$GITHUB_SHA:refs/tags/latest"
           gh release edit latest --notes "Built from $GITHUB_SHA. Download the binary for your machine and check it against SHA256SUMS, then run \`ocx apply\`."

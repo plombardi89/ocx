@@ -12,11 +12,16 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 // ListFile, inside the configuration directory, lists the files the last
-// apply wrote, one relative path per line.
-const ListFile = ".ocx-files"
+// apply wrote, one relative path per line. A new list is written to
+// listTemp first and renamed into place.
+const (
+	ListFile = ".ocx-files"
+	listTemp = ListFile + ".tmp"
+)
 
 // ErrNotInstalled means there is no ListFile, so there's nothing to remove.
 var ErrNotInstalled = errors.New("nothing to remove: no " + ListFile + " found")
@@ -53,6 +58,9 @@ func ConfigDir() (string, error) {
 func Apply(dir string, files map[string][]byte, dryRun bool) ([]Change, error) {
 	root, err := resolve(dir)
 	if err != nil {
+		return nil, err
+	}
+	if err := checkListPaths(root); err != nil {
 		return nil, err
 	}
 	previous, _, err := readList(root)
@@ -106,6 +114,9 @@ func Apply(dir string, files map[string][]byte, dryRun bool) ([]Change, error) {
 func Remove(dir string, dryRun bool) ([]Change, error) {
 	root, err := resolve(dir)
 	if err != nil {
+		return nil, err
+	}
+	if err := checkListPaths(root); err != nil {
 		return nil, err
 	}
 	listed, found, err := readList(root)
@@ -179,6 +190,12 @@ func readList(root string) ([]string, bool, error) {
 	return entries, true, nil
 }
 
+// checkListPaths applies checkPaths's rules to the list and its temporary
+// file, which apply and remove read and replace.
+func checkListPaths(root string) error {
+	return checkPaths(root, []Change{{"write", ListFile}, {"write", listTemp}})
+}
+
 // checkPaths refuses a link anywhere between root and a changed path, a
 // file where a directory belongs, and a directory where a file belongs.
 func checkPaths(root string, changes []Change) error {
@@ -209,16 +226,26 @@ func checkPaths(root string, changes []Change) error {
 }
 
 // deleteFile deletes full, if it's still there, and then each parent
-// directory up to root that the deletion left empty.
+// directory up to root that the deletion left empty. A directory that still
+// holds something, or is already gone, ends the cleanup; any other failure
+// is an error, so the caller keeps the list for a rerun.
 func deleteFile(root, full string) error {
+	rel := func(p string) string {
+		r, _ := filepath.Rel(root, p)
+		return filepath.ToSlash(r)
+	}
 	if err := os.Remove(full); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		rel, _ := filepath.Rel(root, full)
-		return fmt.Errorf("delete %s: %w", filepath.ToSlash(rel), err)
+		return fmt.Errorf("delete %s: %w", rel(full), err)
 	}
 	for dir := filepath.Dir(full); dir != root && strings.HasPrefix(dir, root+string(filepath.Separator)); dir = filepath.Dir(dir) {
-		if os.Remove(dir) != nil {
+		err := os.Remove(dir)
+		if err == nil {
+			continue
+		}
+		if errors.Is(err, syscall.ENOTEMPTY) || errors.Is(err, syscall.EEXIST) || errors.Is(err, fs.ErrNotExist) {
 			break
 		}
+		return fmt.Errorf("delete the emptied directory %s: %w", rel(dir), err)
 	}
 	return nil
 }
@@ -226,7 +253,10 @@ func deleteFile(root, full string) error {
 // writeList replaces root's ListFile by writing a temporary file and
 // renaming it, so a failure leaves the previous list whole.
 func writeList(root string, paths []string) error {
-	tmp := filepath.Join(root, ListFile+".tmp")
+	tmp := filepath.Join(root, listTemp)
+	if err := os.Remove(tmp); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("write %s: %w", ListFile, err)
+	}
 	if err := writeFile(tmp, []byte(strings.Join(paths, "\n")+"\n"), 0o644); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("write %s: %w", ListFile, err)

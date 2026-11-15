@@ -6,7 +6,12 @@ TAG ?= reviewer
 BAKEOFF_MODELS ?= github-copilot/gpt-6.1-sol\#xhigh,github-copilot/gpt-6-astra\#high,github-copilot/claude-opus-5.5\#high
 REPS ?= 3
 
-.PHONY: help check check-offline test fixtures-test eval eval-reviewer eval-critic eval-debug eval-tests eval-e2e bakeoff verify apply fmt
+.PHONY: help check check-offline test fixtures-test eval eval-reviewer eval-critic eval-debug eval-tests eval-e2e bakeoff verify ocx apply fmt
+
+# The checkout's commit, marked when it has uncommitted changes, for builds
+# of ocx from it. Go records this itself, except in a git worktree.
+COMMIT_FLAG = -X main.commit=$$(git rev-parse HEAD)$$(test -z "$$(git status --porcelain)" || echo -modified)
+BUILD_OCX = go build -ldflags "$(COMMIT_FLAG)" -o
 
 help: ## Show targets
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
@@ -51,8 +56,11 @@ bakeoff: ## Compare models on one tag's scenarios: TAG=reviewer|critic|debug|tes
 
 verify: check eval ## Everything: checks, then all evals
 
+ocx: ## Build ocx from this checkout into OUT (default: a new temporary directory) and print its path
+	@out="$(OUT)"; [ -n "$$out" ] || out="$$(mktemp -d)/ocx"; $(BUILD_OCX) "$$out" ./cmd/ocx && echo "$$out"
+
 apply: ## Build ocx from this checkout and run ocx apply, to try a branch on purpose (ARGS="--dry-run" or "--config-dir DIR")
-	@bin="$$(mktemp -d)/ocx" && go build -o "$$bin" ./cmd/ocx && "$$bin" apply $(ARGS)
+	@bin="$$(mktemp -d)/ocx" && $(BUILD_OCX) "$$bin" ./cmd/ocx && "$$bin" apply $(ARGS)
 
 fmt: ## gofmt the Go sources
 	gofmt -w cmd internal *.go
