@@ -302,6 +302,22 @@ func TestAPushMustComeAfterItsApproval(t *testing.T) {
 	}{
 		{name: "reviewed, then pushed", steps: func(ws *Workspace) { approve(ws); push(ws) }},
 		{name: "pushed, then reviewed", steps: func(ws *Workspace) { push(ws); approve(ws) }, fails: []string{"each push made after its approval"}},
+		{name: "a dry run before review", steps: func(ws *Workspace) {
+			if _, err := gitx.Run(ws.Work, "push", "-q", "--dry-run", "origin", "feat/x"); err != nil {
+				t.Fatal(err)
+			}
+			approve(ws)
+			push(ws)
+		}},
+		{name: "a rejected push", steps: func(ws *Workspace) {
+			approve(ws)
+			push(ws)
+			// Moving the remote branch back to main's commit isn't a fast
+			// forward, so the origin refuses it.
+			if _, err := gitx.Run(ws.Work, "push", "-q", "origin", ws.Base+":refs/heads/feat/x"); err == nil {
+				t.Fatal("a push that moves the branch backwards was accepted")
+			}
+		}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

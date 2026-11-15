@@ -478,8 +478,8 @@ func truncate(s string, n int) string {
 }
 
 // pushesBeforeApproval reads a workspace's push log and returns each push to
-// a branch whose commit had no approving review note naming it at the time.
-// A missing log means nothing was pushed.
+// a branch whose commit had no approving review note naming it when the push
+// landed. A missing log means nothing was pushed.
 func pushesBeforeApproval(log string) ([]string, error) {
 	data, err := os.ReadFile(log)
 	if errors.Is(err, os.ErrNotExist) {
