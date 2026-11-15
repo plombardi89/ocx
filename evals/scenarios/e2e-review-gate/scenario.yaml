@@ -7,7 +7,7 @@ timeout: 45m
 prompt: |
   In this repository, add a method `InStock() bool` to `store.Product` that reports whether the product has stock available (Stock > 0), with a table-driven unit test.
 
-  Follow the working agreements: do the work on a feature branch, get it independently reviewed, and push the branch to origin. Do not open a pull request; this remote is not on GitHub.
+  Follow the working agreements: do the work on a feature branch, get it independently reviewed, and push the branch to origin.
 
   This is a non-interactive run. Do not ask questions. If you get blocked, explain why and stop.
 expect:

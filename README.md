@@ -59,6 +59,12 @@ Independence comes from the setup, not from asking nicely:
 | Bugs patched at the symptom | `systematic-debugging` requires a failing reproduction and a step-by-step root cause before any fix; after three failed attempts, a consultant from the other model family gives a second opinion |
 | TODOs slipping into main | The reviewer lists every new TODO for Phil; build opens the pull request as a draft, and only Phil can mark it ready |
 
+## Principles
+
+1. **Local first.** Everything works with git, OpenCode, and any remote. Pull requests, branch protection, and CI are used when the remote is on GitHub, and are never required.
+2. **Guardrails for cooperative agents.** The agents work for Phil. They can skip a step, frame a request to get the answer they want, or cut a corner, and the gates catch that. They aren't built to stop a deliberately malicious agent: policies match the text of a command, so a disguised command gets past them, and an agent that can run git could in principle forge a review note. The pre-push gate catches a skipped review, not a forged one.
+3. **Lightweight.** Prefer a skill or a line in a prompt over new tooling. Evals check the behavior that matters, not every corner of the harness.
+
 ## Writing rules
 
 Every agent follows four rules for anything people read: code comments, docs, plans, commit messages, pull requests, review reports, and replies. The full text is in `config/global-AGENTS.md`; the `writing-style` skill has examples.
@@ -77,6 +83,8 @@ The reviewer enforces these with a separate finding category:
 | WRITING | Yes | No (the reviewer re-reads the fixed text) |
 | MINOR | No | No |
 | NIT | No | No |
+
+When the change is itself a guardrail for cooperative agents, such as a review gate, a permission rule, or an eval check, a way around it that only an agent deliberately trying to defeat it would use is at most MINOR. The reviewer reports it so Phil can decide, without blocking on it.
 
 `make check` applies the mechanical parts of the rules to this repository: no letter or roman-numeral list markers in our Markdown, and no Go or shell comments that point at plans, reviews, or requests.
 
@@ -160,6 +168,7 @@ Eval results go to `evals/results/<timestamp>/` (`summary.md`, plus per-run even
 | `reviewer-python-planted-bug` | Python: a mutable default list shared by every product and mutated in place; the tests only ever add one product |
 | `reviewer-shell-planted-bug` | Shell: dropped `set -euo pipefail` and quoting; with spaces in a path the copy fails but the script reports success and exits 0 |
 | `reviewer-writing-rules` | Correct, tested code whose comments, test name, and doc break the writing rules: WRITING findings, and the one valid TODO listed for Phil |
+| `reviewer-guardrail-gaming` | A pre-push hook that requires an approving review note: approve, with the agent writing the note itself reported as MINOR, and record the verdict. Reports usually mention `.git/hooks`, which a policy protects, so this usually also covers notes that couldn't be passed inline |
 | `critic-vague-plan` | Plan with uncheckable criteria ("fast", "gracefully") and an undefined matching rule: REVISE |
 | `critic-missing-edge-cases` | Concrete plan whose own goal needs insufficient-stock, concurrency, and quantity rules it never states: REVISE |
 | `critic-good-plan` | Complete, checkable plan: APPROVE with no invented gaps or questions |
@@ -276,7 +285,7 @@ Sonnet is the same family as the Opus driver. The comparison rules only prefer a
 1. `make install` shows what would change in `~/.config/opencode` (or `$XDG_CONFIG_HOME/opencode`) without changing anything.
 2. `make install APPLY=1` makes the changes. Each piece becomes a link into this checkout, so `git pull` updates the agents. A global `opencode.jsonc` that only sets `$schema` is backed up and replaced. Anything else ocx didn't create is a conflict, so you can merge your settings first; `FORCE=1` backs it up and replaces it. Backups go in `~/.config/opencode/.ocx-backups/`, which OpenCode doesn't read, and never replace earlier ones. If any step fails, install undoes the steps before it.
 3. In each project, run `make hook-install REPO=/path/to/project` and add an `AGENTS.md` (start from `templates/AGENTS.md`).
-4. On GitHub, protect the default branch with a ruleset that blocks deletion and force pushes and requires a pull request. Private repositories need GitHub Pro for this.
+4. Optionally, on GitHub, protect the default branch with a ruleset that blocks deletion and force pushes and requires a pull request. Private repositories need GitHub Pro for this.
 5. Check everything with `make doctor REPOS="/path/to/project ..."`.
 
 `make uninstall APPLY=1` removes the links and restores what install backed up.
@@ -286,7 +295,7 @@ Sonnet is the same family as the Opus driver. The comparison rules only prefer a
 1. Every link is in place and points into this checkout.
 2. OpenCode, started in an empty project, loads every agent with its pinned model and a non-empty prompt, and all permission probes pass against the installed configuration. A missing `prompts` link otherwise fails silently: OpenCode loads the agents with empty prompts. Doctor also fails if any other configuration file OpenCode loads, such as a system-wide one, sets policies, because the probes can't account for how those combine with ocx's.
 3. The tools agents rely on: a working `gh` login, `gcc` for the race detector, `shellcheck`, and a git credential helper that can actually run.
-4. For each repository: the pre-push hook is installed and current, there's an `AGENTS.md`, and GitHub protects the default branch.
+4. For each repository: the pre-push hook is installed and current, and there's an `AGENTS.md`. When the origin is on GitHub, doctor also warns if the default branch isn't protected.
 
 ### Reviewing without installing
 
@@ -294,7 +303,7 @@ Sonnet is the same family as the Opus driver. The comparison rules only prefer a
 
 ### Bypassing the gate yourself
 
-`git push --no-verify` from your own terminal skips the local hook. Agents can't do that, and GitHub's rules still apply.
+`git push --no-verify` from your own terminal skips the local hook. Agents can't do that. On GitHub, the branch's ruleset still applies.
 
 ## Changes to ocx itself
 
@@ -302,7 +311,7 @@ ocx goes through its own gate:
 
 1. The pre-push hook is installed in this repository, so a commit is pushed only after the reviewer approves it. Until the global install, run the reviewer with `make review`.
 2. CI runs `make check-offline` on every pull request and every push to `main`. It skips the checks that start OpenCode; run `make check` locally for those.
-3. The "Protect main" ruleset requires a pull request and the `check` status to pass before anything merges into `main`.
+3. The "Protect main" ruleset requires a pull request before anything merges into `main`. Nothing waits on CI.
 
 ## Conventions for adding to this repo
 
