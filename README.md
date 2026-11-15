@@ -137,8 +137,8 @@ AGENTS.md                 instructions for agents working on this repository
 .github/workflows/        check: make check-offline on every pull request and push to main;
                           release: builds ocx on every push to main and publishes it
 ocx.go                    embeds the configuration above into the ocx binary
-cmd/ocx/                  the ocx binary: apply, remove, version
-internal/                 the apply package, the checks, and the eval tool behind the Makefile
+cmd/ocx/                  the ocx binary: apply, remove, update, version
+internal/                 the apply and update packages, the checks, and the eval tool behind the Makefile
 ```
 
 ## Make targets
@@ -301,7 +301,7 @@ Sonnet is the same family as the Opus driver. The comparison rules only prefer a
 
 ### Upgrade, try a branch, or remove
 
-1. **Upgrade:** download the newer binary, or rerun `go install`, then run `ocx apply` again. It writes the new files and deletes the ones the new version no longer ships. `ocx version` prints the commit a binary was built from.
+1. **Upgrade:** `ocx update --apply` downloads the newer binary from the `latest` release, checks it against `SHA256SUMS`, replaces the one you ran, and runs `ocx apply` again with it, which writes the new files and deletes the ones the new version no longer ships. `ocx update --check` only reports whether an update is available. `ocx update` installs the release's binary whenever it differs from yours, even if yours is newer, so a `go install` build is replaced by the release build. It needs to be able to write to the directory `ocx` is in, and `OCX_RELEASE_URL` points it at another release location, such as a mirror. `ocx version` prints the commit a binary was built from.
 2. **Try a branch of this repository:** `make apply` from the checkout. Run `ocx apply` from a released binary to go back.
 3. **Remove:** `ocx remove` deletes the files `ocx apply` wrote.
 
