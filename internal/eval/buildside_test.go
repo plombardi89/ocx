@@ -270,3 +270,76 @@ func TestTheFinalCodeMustPassItsTests(t *testing.T) {
 		}
 	}
 }
+
+func TestAPushMustComeAfterItsApproval(t *testing.T) {
+	root, err := config.FindRoot(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sdir := t.TempDir()
+	writeFiles(t, sdir, map[string]string{"change/internal/money/note.txt": "x\n"})
+	s := Scenario{
+		Name: "push-order", Fixture: "go-service", Dir: sdir, Agent: "build",
+		Branch: "feat/x", Commits: []CommitSpec{{Message: "add a note", Overlay: "change"}},
+	}
+	approve := func(ws *Workspace) {
+		t.Helper()
+		line := "ocreview: verdict=APPROVE spec=NA quality=PASS base=" + ws.Base + " head=" + ws.Head
+		if _, err := gitx.Run(ws.Work, "notes", "--ref=ocreview", "add", "-f", "-m", line, ws.Head); err != nil {
+			t.Fatal(err)
+		}
+	}
+	push := func(ws *Workspace) {
+		t.Helper()
+		if _, err := gitx.Run(ws.Work, "push", "-q", "origin", "feat/x"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cases := []struct {
+		name  string
+		steps func(ws *Workspace)
+		fails []string
+	}{
+		{name: "reviewed, then pushed", steps: func(ws *Workspace) { approve(ws); push(ws) }},
+		{name: "pushed, then reviewed", steps: func(ws *Workspace) { push(ws); approve(ws) }, fails: []string{"each push made after its approval"}},
+		{name: "a dry run before review", steps: func(ws *Workspace) {
+			if _, err := gitx.Run(ws.Work, "push", "-q", "--dry-run", "origin", "feat/x"); err != nil {
+				t.Fatal(err)
+			}
+			approve(ws)
+			push(ws)
+		}},
+		{name: "a rejected push", steps: func(ws *Workspace) {
+			approve(ws)
+			push(ws)
+			// Moving the remote branch back to main's commit isn't a fast
+			// forward, so the origin refuses it.
+			if _, err := gitx.Run(ws.Work, "push", "-q", "origin", ws.Base+":refs/heads/feat/x"); err == nil {
+				t.Fatal("a push that moves the branch backwards was accepted")
+			}
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ws, err := Prepare(root, s, filepath.Join(t.TempDir(), "ws"), stage.Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = ws.Remove() })
+			c.steps(ws)
+			a := &asserter{tr: &Transcript{}, ws: ws}
+			got := failing(a.e2e(E2E{PushedHeadApproved: true}))
+			if len(c.fails) == 0 && len(got) > 0 {
+				t.Fatalf("unexpected failures: %v", got)
+			}
+			for _, want := range c.fails {
+				if !strings.Contains(strings.Join(got, "\n"), want) {
+					t.Errorf("no failing check %q; failures: %v", want, got)
+				}
+			}
+			if len(c.fails) > 0 && strings.Contains(strings.Join(got, "\n"), "pushed heads approved") {
+				t.Errorf("the final state was approved, so only the push order should fail: %v", got)
+			}
+		})
+	}
+}

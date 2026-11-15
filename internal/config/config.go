@@ -26,7 +26,6 @@ const (
 	PromptsDir       = "config/prompts"
 	SkillsDir        = "skills"
 	CommandsDir      = "commands"
-	HookFile         = "hooks/pre-push"
 	ProbesFile       = "tests/permissions.yaml"
 	ScenariosDir     = "evals/scenarios"
 	FixturesDir      = "evals/fixtures"

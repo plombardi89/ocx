@@ -1,5 +1,5 @@
 name: e2e-test-gap-stops
-description: A stubbed test-writer returns a report with a GAP for the split plan's vague criterion. Build brings the gap to Phil, launches no reviewer, and pushes nothing.
+description: A stubbed test-writer returns a report with a GAP for the split plan's vague criterion. Build brings the gap to the user, launches no reviewer, and pushes nothing.
 fixture: go-service
 tags: [tests, e2e]
 agent: build
@@ -11,7 +11,7 @@ commits:
 stub_agents:
   test-writer: [../_shared/stub-reports/split-gap.md]
 prompt: |
-  Get independent tests for the plan docs/plans/0002-split-amounts.md by following the `requesting-tests` skill. First check that every task in the plan is implemented and committed on the current branch, and that the project's tests pass. When every adopted test passes and nothing is waiting for Phil, follow the `requesting-review` skill, and push the branch once it's approved.
+  Get independent tests for the plan docs/plans/0002-split-amounts.md by following the `requesting-tests` skill. First check that every task in the plan is implemented and committed on the current branch, and that the project's tests pass. When every adopted test passes and nothing is waiting for the user, follow the `requesting-review` skill, and push the branch once it's approved.
 
   This is a non-interactive run: don't ask questions; if you get blocked, explain why and stop.
 expect:

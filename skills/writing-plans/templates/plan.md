@@ -25,7 +25,7 @@ Decisions: <links to docs/adr/NNNN-*.md, or none>
 
 ## Open questions
 
-<Questions only Phil can answer, most important first, each with a suggested default. Write "None" when all are answered. A plan with open questions can't be approved.>
+<Questions only the user can answer, most important first, each with a suggested default. Write "None" when all are answered. A plan with open questions can't be approved.>
 
 1. <e.g. Should `limit=0` return an empty page or a 400? Suggested default: an empty page.>
 

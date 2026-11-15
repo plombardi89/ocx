@@ -34,4 +34,4 @@ Integer division for the base part; the remainder goes one cent at a time to the
 ## Log
 
 1. 2026-11-10: Plan drafted.
-2. 2026-11-11: Critique round 1: APPROVE. Phil approved the plan.
+2. 2026-11-11: Critique round 1: APPROVE. The user approved the plan.

@@ -2,7 +2,9 @@ package eval
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -277,6 +279,11 @@ func (a *asserter) e2e(e E2E) []Check {
 		add("pushed heads approved", ok, "%s", detail)
 	}
 
+	if e.PushedHeadApproved || e.ApprovedIfPushed {
+		early, err := pushesBeforeApproval(a.ws.PushLog())
+		add("each push made after its approval", err == nil && len(early) == 0, "err=%v, pushed before an approving review: %v", err, early)
+	}
+
 	for _, glob := range e.PushedFilesInclude {
 		var files []string
 		for _, b := range pushed {
@@ -468,4 +475,32 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// pushesBeforeApproval reads a workspace's push log and returns each push to
+// a branch whose commit had no approving review note naming it when the push
+// landed. A missing log means nothing was pushed.
+func pushesBeforeApproval(log string) ([]string, error) {
+	data, err := os.ReadFile(log)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var early []string
+	for _, line := range strings.Split(strings.TrimRight(string(data), "\n"), "\n") {
+		fields := strings.SplitN(line, " ", 3)
+		if len(fields) < 2 || !strings.HasPrefix(fields[1], "refs/heads/") {
+			continue
+		}
+		sha, note := fields[0], ""
+		if len(fields) == 3 {
+			note = fields[2]
+		}
+		if m := noteLine.FindStringSubmatch(note); m == nil || m[1] != "APPROVE" || m[2] != sha {
+			early = append(early, strings.TrimPrefix(fields[1], "refs/heads/")+" at "+sha)
+		}
+	}
+	return early, nil
 }

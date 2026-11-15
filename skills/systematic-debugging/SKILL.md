@@ -47,7 +47,7 @@ Stop guessing after three experiments in a row disprove your leading hypothesis,
 
 1. **Build:** get a second opinion from the `consultant` subagent, using the template below.
 2. **Debugger:** report STUCK, with every attempt.
-3. If the consultant's hypotheses don't hold up either, bring everything to Phil.
+3. If the consultant's hypotheses don't hold up either, bring everything to the user.
 
 The consultation request is this template with the fields filled in, and nothing else:
 

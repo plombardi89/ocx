@@ -1,5 +1,5 @@
 name: reviewer-writing-rules
-description: Correct, tested low-stock report whose comments, test name, and doc break the writing rules, plus one valid TODO that must be raised to Phil rather than flagged.
+description: Correct, tested low-stock report whose comments, test name, and doc break the writing rules, plus one valid TODO that must be raised to the user rather than flagged.
 fixture: go-service
 tags: [reviewer, writing]
 agent: reviewer
@@ -20,7 +20,7 @@ expect:
   min_writing: 3
   mentions:
     - "(?i)\\[WRITING\\]"
-    - "(?is)## TODOs for Phil.*sort order"
+    - "(?is)## Open TODOs.*sort order"
     - "(?i)(TestPlan0005Task2|test name)"
   note: true
   unchanged: true

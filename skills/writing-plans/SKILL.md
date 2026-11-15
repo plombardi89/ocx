@@ -1,6 +1,6 @@
 ---
 name: writing-plans
-description: Use when work will take more than one sitting or several steps, touches multiple components, or Phil asks for a plan, spec, or design decision record.
+description: Use when work will take more than one sitting or several steps, touches multiple components, or the user asks for a plan, spec, or design decision record.
 ---
 
 # Writing plans
@@ -11,7 +11,7 @@ Match the paperwork to the size of the work.
 | --- | --- |
 | Fits in one sitting | None. The commit message is the record. |
 | Several steps or sessions | A plan: `docs/plans/NNNN-<slug>.md`, deleted once the work has merged |
-| A decision of Phil's that should outlive the work | An architecture decision record (ADR): `docs/adr/NNNN-<slug>.md` |
+| A decision of the user's that should outlive the work | An architecture decision record (ADR): `docs/adr/NNNN-<slug>.md` |
 
 `NNNN` is the next four-digit number never used in that directory, starting at `0001`; check `git log --name-only` for deleted files too. The slug is short kebab-case.
 
@@ -36,9 +36,9 @@ Before drafting, make sure you know:
 1. The problem, and who it's for.
 2. What "done" looks like, in observable behavior.
 3. What is out of scope.
-4. Decisions only Phil can make: behavior on empty, invalid, or excessive input; error responses; limits; compatibility with current callers; concurrency expectations.
+4. Decisions only the user can make: behavior on empty, invalid, or excessive input; error responses; limits; compatibility with current callers; concurrency expectations.
 
-Learn what you can from the code first; don't ask Phil what the repository already answers. Then ask Phil the rest in one batch with the question tool, each question with a suggested default he can accept. If you can't ask (for example in a non-interactive run), write the questions under "Open questions" in the plan instead.
+Learn what you can from the code first; don't ask the user what the repository already answers. Then ask the user the rest in one batch with the question tool, each question with a suggested default the user can accept. If you can't ask (for example in a non-interactive run), write the questions under "Open questions" in the plan instead.
 
 ### 2. Draft
 
@@ -60,14 +60,14 @@ Round: <1, 2, or 3>
 
 Read the `OCPLAN` line at the end of the report, then:
 
-1. **Findings:** fix every BLOCKER, MAJOR, and WRITING finding by changing the plan, or dispute it with evidence by bringing it to Phil. Never drop one silently.
-2. **Questions for Phil:** ask Phil each one, with the critic's suggested default, and write his answers into the plan as criteria.
+1. **Findings:** fix every BLOCKER, MAJOR, and WRITING finding by changing the plan, or dispute it with evidence by bringing it to the user. Never drop one silently.
+2. **Questions for the user:** ask the user each one, with the critic's suggested default, and write their answers into the plan as criteria.
 3. **Log:** append `Critique round <n>: <verdict> (<counts>)` and what you changed.
-4. **Next round:** request round n+1 after revising. If round 3 still returns REVISE, stop and bring the remaining findings to Phil. Don't start round 4.
+4. **Next round:** request round n+1 after revising. If round 3 still returns REVISE, stop and bring the remaining findings to the user. Don't start round 4.
 
-### 4. Get Phil's approval
+### 4. Get the user's approval
 
-Show Phil the Goal, Non-goals, Acceptance criteria, and the critic's final verdict, and ask for his approval. Record it in the Log. If he changes anything substantive, run the critique again.
+Show the user the Goal, Non-goals, Acceptance criteria, and the critic's final verdict, and ask for their approval. Record it in the Log. If they change anything substantive, run the critique again.
 
 ### 5. Commit and implement
 
@@ -83,7 +83,7 @@ Old plans fill agents' context without helping, so they don't stay. When you sta
 
 ## ADRs
 
-Copy `templates/adr.md` and keep it short: the context, the decision, the alternatives considered, and the consequences. Write one for each decision of Phil's that should outlive the work: an answer to a plan's open question that constrains later work, a scope ruling during review, or a settled dispute. Write it on the branch where he decides, with `Status: accepted`, and link it from the plan if there is one. You may draft one with `Status: proposed` for Phil to accept; it isn't a decision until he does.
+Copy `templates/adr.md` and keep it short: the context, the decision, the alternatives considered, and the consequences. Write one for each decision of the user's that should outlive the work: an answer to a plan's open question that constrains later work, a scope ruling during review, or a settled dispute. Write it on the branch where the user decides, with `Status: accepted`, and link it from the plan if there is one. You may draft one with `Status: proposed` for the user to accept; it isn't a decision until the user accepts it.
 
 An accepted ADR is never edited. When a decision changes, write a new ADR that names the old one in `Replaces:`, and delete the old one in the same commit, so `docs/adr/` holds only the decisions in force.
 
@@ -91,7 +91,7 @@ An accepted ADR is never edited. When a decision changes, write a new ADR that n
 
 | Thought | Reality |
 | --- | --- |
-| "The request is clear enough; I'll skip the questions." | Edge-case behavior is Phil's call. Ask, with suggested defaults. |
+| "The request is clear enough; I'll skip the questions." | Edge-case behavior is the user's call. Ask, with suggested defaults. |
 | "I'll tell the critic the plan is small so it goes faster." | That's framing. Use the template, nothing else. |
-| "The critic is nitpicking; I'll start coding." | Fix the findings, dispute them to Phil, or stop at the round cap. No code before approval. |
-| "Phil approved the idea, so the plan is approved." | Approval is for the written criteria. Show them to him. |
+| "The critic is nitpicking; I'll start coding." | Fix the findings, dispute them to the user, or stop at the round cap. No code before approval. |
+| "The user approved the idea, so the plan is approved." | Approval is for the written criteria. Show them to the user. |

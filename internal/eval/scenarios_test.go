@@ -26,7 +26,7 @@ func loadScenario(t *testing.T, root, name string) Scenario {
 	return Scenario{}
 }
 
-// The /write-tests scenarios exercise the command as Phil runs it, so their
+// The /write-tests scenarios exercise the command as the user runs it, so their
 // prompts must stay the command's text.
 func TestWriteTestsScenariosUseTheCommandText(t *testing.T) {
 	root, err := config.FindRoot(".")

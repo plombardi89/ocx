@@ -1,6 +1,6 @@
 // Package check validates the ocx sources: configuration, agents,
-// skills, commands, the review gate, eval scenarios, and (with OpenCode
-// available) the fully resolved permissions of every agent.
+// skills, commands, eval scenarios, and (with OpenCode available) the fully
+// resolved permissions of every agent.
 package check
 
 import (
@@ -22,7 +22,6 @@ import (
 	"github.com/plombardi89/ocx/internal/config"
 	"github.com/plombardi89/ocx/internal/eval"
 	"github.com/plombardi89/ocx/internal/gitx"
-	"github.com/plombardi89/ocx/internal/hook"
 	"github.com/plombardi89/ocx/internal/perm"
 	"github.com/plombardi89/ocx/internal/stage"
 )
@@ -72,7 +71,6 @@ func Run(root string, opts Options) []Result {
 		checkSkills(skills, skillErr),
 		checkCommands(cfg, commands, cmdErr),
 		checkReferences(root, cfg, skills),
-		checkHook(root),
 		checkScenarios(root),
 		checkOwnWriting(root),
 	)
@@ -493,31 +491,6 @@ func checkReferences(root string, cfg *config.Config, skills []config.Skill) Res
 	return result("references", problems)
 }
 
-func checkHook(root string) Result {
-	path := filepath.Join(root, config.HookFile)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return result("pre-push hook", []string{err.Error()})
-	}
-	var problems []string
-	if !strings.Contains(string(data), hook.Marker) {
-		problems = append(problems, "hook is missing the "+hook.Marker+" marker")
-	}
-	if out, err := exec.Command("sh", "-n", path).CombinedOutput(); err != nil {
-		problems = append(problems, "sh -n: "+strings.TrimSpace(string(out)))
-	}
-	if len(problems) > 0 {
-		return result("pre-push hook", problems)
-	}
-	if _, err := exec.LookPath("shellcheck"); err != nil {
-		return Result{Name: "pre-push hook", Status: Warn, Details: []string{"shellcheck not installed; syntax checked with sh -n only"}}
-	}
-	if out, err := exec.Command("shellcheck", path).CombinedOutput(); err != nil {
-		return result("pre-push hook", []string{"shellcheck:\n" + strings.TrimSpace(string(out))})
-	}
-	return result("pre-push hook", nil)
-}
-
 func checkScenarios(root string) Result {
 	scenarios, err := eval.LoadScenarios(root)
 	if err != nil {
@@ -614,13 +587,6 @@ func checkOwnWriting(root string) Result {
 	for _, dir := range []string{"cmd", "internal"} {
 		visit(dir, map[string]bool{".go": true}, goCode)
 	}
-	visit("hooks", map[string]bool{"": true}, func(rel string, data []byte) {
-		for i, line := range strings.Split(string(data), "\n") {
-			if text, ok := strings.CutPrefix(strings.TrimSpace(line), "#"); ok && coupledText.MatchString(text) {
-				problems = append(problems, fmt.Sprintf("%s:%d: %s", rel, i+1, coupled))
-			}
-		}
-	})
 	return result("writing rules (this repository)", problems)
 }
 

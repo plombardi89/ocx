@@ -6,7 +6,7 @@ agent: build
 timeout: 75m
 base_overlays: [base]
 prompt: |
-  Implement the plan docs/plans/0002-split-amounts.md. Phil has approved it. Follow your working agreements.
+  Implement the plan docs/plans/0002-split-amounts.md. The user has approved it. Follow your working agreements.
 
   Push the branch to origin when it's approved. Don't open a pull request; this remote is not on GitHub. This is a non-interactive run: don't ask questions; if you get blocked, explain why and stop.
 expect:

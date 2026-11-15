@@ -1,5 +1,6 @@
-// Command ocx is the toolbox for this repository: static checks, evals,
-// sandboxes, staging, review-gate installation, global install, and doctor.
+// Command ocx develops and installs this repository's agents and skills:
+// static checks, evals, global install, and doctor. It plays no part in the
+// development loop itself.
 package main
 
 import (
@@ -15,24 +16,17 @@ import (
 	"github.com/plombardi89/ocx/internal/config"
 	"github.com/plombardi89/ocx/internal/doctor"
 	"github.com/plombardi89/ocx/internal/eval"
-	"github.com/plombardi89/ocx/internal/hook"
 	"github.com/plombardi89/ocx/internal/install"
-	"github.com/plombardi89/ocx/internal/review"
-	"github.com/plombardi89/ocx/internal/stage"
 )
 
 const usage = `ocx - checks, evals, and tools for the ocx agents and skills
 
 Usage:
-  ocx check [--offline]                 validate configuration, skills, hook, scenarios, permissions
+  ocx check [--offline]                 validate configuration, skills, scenarios, permissions
   ocx eval [flags]                      run eval scenarios headlessly with opencode
-  ocx sandbox [--scenario NAME]         create a throwaway project with this config staged; prints its path
-  ocx stage DIR                         stage this config into DIR/.opencode (DIR must not have one)
-  ocx hook install REPO                 install the pre-push review gate into REPO
   ocx install [--apply] [--force]       link the agents, skills, and commands into OpenCode's global config
   ocx uninstall [--apply]               remove those links and restore what install backed up
-  ocx doctor [--offline] [REPO...]      check the install, OpenCode, tools, and each repo's gate and branch protection
-  ocx review [--repo DIR] [flags]       run the independent reviewer on a repo's current commit; exits 0 only on approval
+  ocx doctor [--offline] [REPO...]      check the install, OpenCode, tools, and each repo's AGENTS.md and branch protection
 
 Run "ocx <command> -h" for flags.
 `
@@ -52,20 +46,12 @@ func main() {
 		err = runCheck(root, args)
 	case "eval":
 		err = runEval(root, args)
-	case "sandbox":
-		err = runSandbox(root, args)
-	case "stage":
-		err = runStage(root, args)
-	case "hook":
-		err = runHook(root, args)
 	case "install":
 		err = runInstall(root, args)
 	case "uninstall":
 		err = runUninstall(args)
 	case "doctor":
 		err = runDoctor(root, args)
-	case "review":
-		err = runReview(root, args)
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return
@@ -194,63 +180,6 @@ func runEval(root string, args []string) error {
 	return nil
 }
 
-func runSandbox(root string, args []string) error {
-	fs := flag.NewFlagSet("sandbox", flag.ExitOnError)
-	name := fs.String("scenario", "", "check out this scenario's branch (default: plain fixture on main)")
-	fixture := fs.String("fixture", "go-service", "fixture to copy when no scenario is given")
-	_ = fs.Parse(args)
-
-	s := eval.Scenario{Fixture: *fixture}
-	if *name != "" {
-		all, err := eval.LoadScenarios(root)
-		if err != nil {
-			return err
-		}
-		found := false
-		for _, sc := range all {
-			if sc.Name == *name {
-				s, found = sc, true
-			}
-		}
-		if !found {
-			return fmt.Errorf("unknown scenario %q", *name)
-		}
-	}
-	dir, err := os.MkdirTemp(check.ScratchDir(), "ocx-sandbox-")
-	if err != nil {
-		return err
-	}
-	ws, err := eval.Prepare(root, s, dir, stage.Options{})
-	if err != nil {
-		return err
-	}
-	fmt.Println(ws.Work)
-	return nil
-}
-
-func runStage(root string, args []string) error {
-	if len(args) != 1 {
-		return errors.New("usage: ocx stage DIR")
-	}
-	if err := stage.Stage(root, args[0], stage.Options{}); err != nil {
-		return err
-	}
-	fmt.Printf("staged into %s/.opencode (remove it to undo)\n", args[0])
-	return nil
-}
-
-func runHook(root string, args []string) error {
-	if len(args) != 2 || args[0] != "install" {
-		return errors.New("usage: ocx hook install REPO")
-	}
-	path, err := hook.Install(filepath.Join(root, config.HookFile), args[1])
-	if err != nil {
-		return err
-	}
-	fmt.Println("installed", path)
-	return nil
-}
-
 func configDirFlag(fs *flag.FlagSet) *string {
 	return fs.String("config-dir", "", "OpenCode's global configuration directory (default: $XDG_CONFIG_HOME/opencode or ~/.config/opencode)")
 }
@@ -338,44 +267,4 @@ func runDoctor(root string, args []string) error {
 		repos = append(repos, abs)
 	}
 	return printResults(doctor.Run(doctor.Options{Root: root, ConfigDir: dir, Repos: repos, Offline: *offline}))
-}
-
-func runReview(root string, args []string) error {
-	fs := flag.NewFlagSet("review", flag.ExitOnError)
-	repo := fs.String("repo", ".", "repository whose current commit to review")
-	plan := fs.String("plan", "", "plan file, relative to the repository")
-	round := fs.Int("round", 1, "review round")
-	previous := fs.String("previous", "", "full sha of the head reviewed in the previous round")
-	model := fs.String("model", "", "override the reviewer's pinned model")
-	_ = fs.Parse(args)
-
-	abs, err := filepath.Abs(*repo)
-	if err != nil {
-		return err
-	}
-	o, err := review.Run(review.Options{
-		Root: root, Repo: abs, Plan: *plan, Round: *round, PreviousReview: *previous, Model: *model,
-		Log: func(format string, a ...any) { fmt.Fprintf(os.Stderr, "ocx: "+format+"\n", a...) },
-	})
-	if o != nil && o.Report != "" {
-		fmt.Println(o.Report)
-	}
-	if err != nil {
-		if o != nil && o.EventsPath != "" {
-			fmt.Fprintf(os.Stderr, "ocx: events: %s\n", o.EventsPath)
-		}
-		return err
-	}
-	fmt.Fprintf(os.Stderr, "\nocx: reviewed %s in %s; note: %s\n", o.Head[:7], o.Duration.Round(time.Second), o.NoteFirstLine)
-	if !o.Approved() {
-		next := fmt.Sprintf("make review ROUND=%d PREVIOUS=%s", *round+1, o.Head)
-		if abs != root {
-			next += " REPO=" + abs
-		}
-		if *plan != "" {
-			next += " PLAN=" + *plan
-		}
-		return fmt.Errorf("not approved (%s); fix the findings, commit, and run the next round: %s", o.Verdict, next)
-	}
-	return nil
 }
