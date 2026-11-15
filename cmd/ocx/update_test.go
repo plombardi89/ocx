@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -49,12 +50,12 @@ func serveRelease(t *testing.T, binary []byte) *atomic.Int32 {
 	return &hits
 }
 
-// fakeExecutable makes runUpdate replace a file in a temporary directory
-// instead of the test binary, and returns that file's path.
-func fakeExecutable(t *testing.T, content string) string {
+// fakeExecutable makes runUpdate replace a file holding "old" in a
+// temporary directory instead of the test binary, and returns its path.
+func fakeExecutable(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "ocx")
-	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte("old\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	orig := executable
@@ -65,7 +66,7 @@ func fakeExecutable(t *testing.T, content string) string {
 
 func TestUpdateUsageErrorsChangeNothing(t *testing.T) {
 	hits := serveRelease(t, []byte("#!/bin/sh\necho new\n"))
-	exe := fakeExecutable(t, "old\n")
+	exe := fakeExecutable(t)
 	for _, args := range [][]string{
 		{"update", "--check", "--apply"},
 		{"update", "--bogus"},
@@ -88,7 +89,7 @@ func TestUpdateUsageErrorsChangeNothing(t *testing.T) {
 
 func TestUpdateCheckChangesNothing(t *testing.T) {
 	hits := serveRelease(t, []byte("#!/bin/sh\necho new\n"))
-	exe := fakeExecutable(t, "old\n")
+	exe := fakeExecutable(t)
 	var out, errOut strings.Builder
 	if code := run([]string{"update", "--check"}, &out, &errOut); code != 0 {
 		t.Fatalf("exited %d: %s", code, errOut.String())
@@ -107,7 +108,7 @@ func TestUpdateCheckChangesNothing(t *testing.T) {
 func TestUpdateApplyPassesTheNewBinarysOutputAndStatusThrough(t *testing.T) {
 	standIn := "#!/bin/sh\ncase \"$1\" in\nversion) echo stand-in ;;\napply) echo applied out; echo applied err >&2; exit 7 ;;\nesac\n"
 	serveRelease(t, []byte(standIn))
-	exe := fakeExecutable(t, "old\n")
+	exe := fakeExecutable(t)
 	var out, errOut strings.Builder
 	code := run([]string{"update", "--apply"}, &out, &errOut)
 	if code != 7 {
@@ -129,7 +130,7 @@ func TestUpdateApplyPassesTheNewBinarysOutputAndStatusThrough(t *testing.T) {
 func buildStamped(t *testing.T, stamp string) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "ocx")
-	cmd := exec.Command("go", "build", "-buildvcs=false", "-ldflags", "-X main.commit="+stamp, "-o", bin, ".")
+	cmd := exec.CommandContext(t.Context(), "go", "build", "-buildvcs=false", "-ldflags", "-X main.commit="+stamp, "-o", bin, ".")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
@@ -156,13 +157,13 @@ type result struct {
 
 func ocxRun(t *testing.T, bin string, args ...string) result {
 	t.Helper()
-	cmd := exec.Command(bin, args...)
+	cmd := exec.CommandContext(t.Context(), bin, args...)
 	cmd.Dir = t.TempDir()
 	var out, errOut strings.Builder
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	err := cmd.Run()
 	code := 0
-	if exitErr, ok := err.(*exec.ExitError); ok {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		code = exitErr.ExitCode()
 	} else if err != nil {
 		t.Fatal(err)
@@ -232,7 +233,7 @@ func TestAnEmptyConfigDirWithoutApplyIsStillAUsageError(t *testing.T) {
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			hits := serveRelease(t, []byte("#!/bin/sh\necho new-version\n"))
-			exe := fakeExecutable(t, "old\n")
+			exe := fakeExecutable(t)
 			var out, errOut strings.Builder
 			if code := run(args, &out, &errOut); code != 2 {
 				t.Errorf("exited %d, want 2; stdout=%q stderr=%q", code, out.String(), errOut.String())

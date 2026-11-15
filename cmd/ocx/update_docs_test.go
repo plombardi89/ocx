@@ -37,7 +37,7 @@ func updReadText(t *testing.T, rel ...string) string {
 // updLineWith returns the first line of text that contains marker.
 func updLineWith(t *testing.T, text, marker string) string {
 	t.Helper()
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		if strings.Contains(line, marker) {
 			return line
 		}

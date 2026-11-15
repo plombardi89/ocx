@@ -35,6 +35,7 @@ type release struct {
 }
 
 func newRelease(t *testing.T) *release {
+	t.Helper()
 	r := &release{t: t, files: map[string]http.HandlerFunc{}, hits: map[string]int{}}
 	r.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		name := strings.TrimPrefix(req.URL.Path, "/")
@@ -173,7 +174,7 @@ func TestFailedDownloadsLeaveTheBinaryAlone(t *testing.T) {
 			opts.MaxDownload = 200
 		}, "larger than"},
 		{"a timeout", func(r *release, opts *Options) {
-			r.files["ocx-linux-amd64"] = func(w http.ResponseWriter, req *http.Request) {
+			r.files["ocx-linux-amd64"] = func(_ http.ResponseWriter, req *http.Request) {
 				select {
 				case <-time.After(5 * time.Second):
 				case <-req.Context().Done():
@@ -298,13 +299,13 @@ func TestAnUnsupportedSystemDownloadsNothing(t *testing.T) {
 
 func TestReplacesTheFileALinkPointsTo(t *testing.T) {
 	_, opts := standard(t)
-	real := opts.Executable
+	realPath := opts.Executable
 	linkDir := t.TempDir()
 	link := filepath.Join(linkDir, "ocx")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(realPath, link); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{filepath.Join(linkDir, "other"), filepath.Join(filepath.Dir(real), "other")} {
+	for _, f := range []string{filepath.Join(linkDir, "other"), filepath.Join(filepath.Dir(realPath), "other")} {
 		if err := os.WriteFile(f, []byte("other\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -314,16 +315,16 @@ func TestReplacesTheFileALinkPointsTo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Path != real {
-		t.Errorf("replaced %s, want %s", res.Path, real)
+	if res.Path != realPath {
+		t.Errorf("replaced %s, want %s", res.Path, realPath)
 	}
-	if target, err := os.Readlink(link); err != nil || target != real {
+	if target, err := os.Readlink(link); err != nil || target != realPath {
 		t.Errorf("the link now points to %q, %v", target, err)
 	}
-	if got, _ := os.ReadFile(real); string(got) != newBinary {
+	if got, _ := os.ReadFile(realPath); string(got) != newBinary {
 		t.Errorf("the linked file = %q", got)
 	}
-	for _, dir := range []string{linkDir, filepath.Dir(real)} {
+	for _, dir := range []string{linkDir, filepath.Dir(realPath)} {
 		entries, _ := os.ReadDir(dir)
 		if len(entries) != 2 {
 			t.Errorf("%s holds %d entries, want ocx and other", dir, len(entries))

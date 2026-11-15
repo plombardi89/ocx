@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -19,11 +20,11 @@ var executable = os.Executable
 // usageError makes run print the error and exit with status 2.
 type usageError struct{ error }
 
-// exitStatus makes run exit with that status without printing anything,
+// exitStatusError makes run exit with that status without printing anything,
 // because the command that failed already printed its own message.
-type exitStatus int
+type exitStatusError int
 
-func (e exitStatus) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
+func (e exitStatusError) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
 
 func runUpdate(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
@@ -77,12 +78,11 @@ func runUpdate(args []string, stdout, stderr io.Writer) error {
 	if dirGiven {
 		applyArgs = append(applyArgs, "--config-dir", *dir)
 	}
-	cmd := exec.Command(res.Path, applyArgs...)
+	cmd := exec.CommandContext(context.Background(), res.Path, applyArgs...)
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return exitStatus(exitErr.ExitCode())
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+			return exitStatusError(exitErr.ExitCode())
 		}
 		return fmt.Errorf("run %s apply: %w", res.Path, err)
 	}
