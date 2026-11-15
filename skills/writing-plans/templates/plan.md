@@ -2,7 +2,7 @@
 
 Status: draft | in-progress | done
 Branch: <type>/<slug>
-Decisions: <links to docs/decisions/NNNN-*.md, or none>
+Decisions: <links to docs/adr/NNNN-*.md, or none>
 
 ## Goal
 

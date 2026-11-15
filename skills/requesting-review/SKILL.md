@@ -41,7 +41,7 @@ Previous review: <full sha of the head reviewed in the previous round, or none>
 
 Read the `OCREVIEW` line at the end of the report.
 
-**APPROVE:** push (see the `git-workflow` skill). The approval covers only that commit. Any new commit, amend, or rebase needs a new review.
+**APPROVE:** push (see the `git-workflow` skill). The approval covers only that commit. Any new commit, amend, or rebase needs a new review. From round 2 on, an approval can still list new MAJOR or WRITING findings. Don't fix them on this branch, which would need another round: list them for Phil in your summary under "Decisions for Phil", and in the pull request.
 
 **REQUEST_CHANGES:** handle every BLOCKER, MAJOR, and WRITING finding in one of two ways. Never drop one silently.
 

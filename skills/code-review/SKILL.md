@@ -34,6 +34,7 @@ Always use full 40-character SHAs from `git rev-parse`.
 
 - **Plan given:** read it in full. Write down each acceptance criterion; you will mark each one MET, NOT MET, or UNVERIFIED with evidence.
 - **No plan:** intent comes from the commit messages and the code. Spec verdict is NA. Do not invent requirements.
+- **ADRs:** read each ADR in `docs/adr/` that Base..Head adds or changes, or that the plan links, and no others. An accepted ADR is Phil's decision: don't report behavior it puts out of scope, and name the ADR wherever you rely on it. A proposed ADR isn't a decision yet: list it under "TODOs for Phil" as `ADR NNNN is proposed: <title>`.
 - **Round 2 or later:** read the previous verdict, including its harness code, with `git notes --ref=ocreview show <Previous review sha>`. Step 7 says how to check each earlier finding. You still review the whole range.
 
 ## 3. Read
@@ -112,7 +113,7 @@ For each BLOCKER and MAJOR in the previous review:
 2. **Regression test?** Find the author's test for this finding in Base..Head. Every BLOCKER and MAJOR fix needs one; MINOR and NIT fixes don't.
 3. **Does it fail without the fix?** Create a second scratch worktree at the previously reviewed head, copy the author's regression test files into it, and run them. They must fail there, because of the bug, and pass on Head. A compile failure only counts if it is caused by the fixed behavior itself; otherwise add minimal glue in the scratch copy or judge by reading and say so.
 
-A fixed BLOCKER or MAJOR without a regression test that fails on the previous head is a new MAJOR: "missing regression test for <finding>". A finding that isn't actually fixed keeps its original severity.
+A fixed BLOCKER or MAJOR without a regression test that fails on the previous head isn't resolved: report "missing regression test for <finding>" as a MAJOR, and it blocks like the original finding. A finding that isn't actually fixed keeps its original severity.
 
 For each WRITING finding in the previous review, re-read the text. It must now follow the rule; no test is needed.
 
@@ -135,7 +136,7 @@ List every TODO the change adds under "TODOs for Phil". Phil decides whether eac
 | --- | --- |
 | BLOCKER | Wrong results, crash or panic on reachable input, data loss or corruption, a data race or atomicity bug, a security hole, a broken build or failing test, or an acceptance criterion NOT MET. |
 | MAJOR | A plausible bug on a realistic edge case, an unhandled or swallowed error, a missing test for specified behavior, a missing regression test for a fixed BLOCKER or MAJOR, a breaking API or contract change the plan does not call for, a resource leak. |
-| WRITING | A clear break of the writing rules in comments, doc comments, test names, docs, or commit messages. Blocks approval; needs no regression test. |
+| WRITING | A clear break of the writing rules in comments, doc comments, test names, docs, or commit messages. Blocks approval as step 10 says; needs no regression test. |
 | MINOR | Maintainability or clarity outside the writing rules, small inefficiencies, missing docs on exported API. |
 | NIT | Style and preference. Never blocks. |
 
@@ -146,7 +147,7 @@ Every BLOCKER and MAJOR needs evidence: file and line, plus a failing input, a c
 ## 10. Decide
 
 1. **spec:** PASS if every acceptance criterion is MET; FAIL if any is NOT MET; NA when there is no plan. UNVERIFIED criteria with no counter-evidence count as MET only if you explain why.
-2. **quality:** PASS if there are no BLOCKER, MAJOR, or WRITING findings; otherwise FAIL.
+2. **quality:** in round 1, PASS if there are no BLOCKER, MAJOR, or WRITING findings. In round 2 and later, PASS if there are no BLOCKER findings and every BLOCKER, MAJOR, and WRITING finding from earlier rounds is resolved as step 7 says. Report new MAJOR and WRITING findings from round 2 on as usual, but they don't block: Phil decides on them, so each review converges instead of finding new edge cases every round. Otherwise FAIL.
 3. **verdict:** APPROVE only if spec is not FAIL and quality is PASS. Otherwise REQUEST_CHANGES.
 
 ## 11. Clean up

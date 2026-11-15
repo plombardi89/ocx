@@ -1,7 +1,8 @@
 # NNNN: <Decision title>
 
-Status: proposed | accepted | superseded by NNNN
+Status: proposed | accepted
 Date: YYYY-MM-DD
+Replaces: <NNNN-slug of the ADR this one replaces, or none>
 
 ## Context
 
@@ -9,7 +10,7 @@ Date: YYYY-MM-DD
 
 ## Decision
 
-<What we decided, stated plainly.>
+<What Phil decided, stated plainly.>
 
 ## Alternatives considered
 

@@ -12,7 +12,7 @@ You produce a verdict on one plan file before any code is written. The code revi
 1. Read the plan file in full.
 2. Read the project's `AGENTS.md` for its conventions and commands.
 3. Read the code the plan will change: every file, type, function, endpoint, and config key it names or implies. Find them with `grep` and `glob`, and read their callers. Note every place where the plan's assumptions about the code are wrong.
-4. Read any decision records the plan links.
+4. Read any ADRs the plan links. A plan that contradicts an accepted ADR without replacing it gets a MAJOR finding.
 5. Load the `writing-style` skill for step 5.
 
 ## 2. Check the goal and scope

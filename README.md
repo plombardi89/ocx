@@ -55,7 +55,9 @@ Independence comes from the setup, not from asking nicely:
 | Tests that share the author's blind spots | For planned work, the test-writer writes tests from the acceptance criteria in a fresh context; expected values come only from the plan, and each passing test is shown to catch a deliberate break. Build adopts them unchanged and may not weaken one without Phil's approval |
 | Fixes without proof | Every BLOCKER and MAJOR fix needs a regression test; next round, the reviewer runs it on the previous commit and requires it to fail there |
 | Author skips review | Pre-push hook requires an approval note; only the reviewer may write notes; policies block `--no-verify`, `git -c`, `git config`, hook edits, force pushes, main/master |
-| Unreadable comments and docs | The writing rules apply to every agent; the reviewer reports clear breaks as WRITING findings, which block approval |
+| Unreadable comments and docs | The writing rules apply to every agent; the reviewer reports clear breaks as WRITING findings, which block approval in round 1 |
+| Reviews that never converge | From round 2, only BLOCKERs and unresolved earlier findings block; new MAJOR and WRITING findings go to Phil; round 3 is a hard stop |
+| Old plans and buried decisions | Phil's lasting decisions go in short ADRs in `docs/adr/`; the next branch deletes finished plans; the reviewer reads the ADRs a change adds or its plan links |
 | Bugs patched at the symptom | `systematic-debugging` requires a failing reproduction and a step-by-step root cause before any fix; after three failed attempts, a consultant from the other model family gives a second opinion |
 | TODOs slipping into main | The reviewer lists every new TODO for Phil; build opens the pull request as a draft, and only Phil can mark it ready |
 
@@ -83,6 +85,8 @@ The reviewer enforces these with a separate finding category:
 | WRITING | Yes | No (the reviewer re-reads the fixed text) |
 | MINOR | No | No |
 | NIT | No | No |
+
+From round 2, only BLOCKER findings and earlier findings that aren't resolved block approval. New MAJOR and WRITING findings are still reported, and build lists them for Phil instead of fixing them on the branch.
 
 When the change is itself a guardrail for cooperative agents, such as a review gate, a permission rule, or an eval check, a way around it that only an agent deliberately trying to defeat it would use is at most MINOR. The reviewer reports it so Phil can decide, without blocking on it.
 

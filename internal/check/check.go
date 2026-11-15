@@ -538,7 +538,7 @@ var (
 	letterListItem = regexp.MustCompile(`^\s*(?:[a-zA-Z]|[ivxIVX]{2,})[.)]\s+\S`)
 	// coupledText matches comment text that points at plans, reviews, or
 	// requests instead of standing on its own.
-	coupledText = regexp.MustCompile(`(?i)\b(docs/plans|plan \d|finding \d|review finding|task \d+|as requested|per review)\b`)
+	coupledText = regexp.MustCompile(`(?i)\b(docs/plans|docs/adr|plan \d|finding \d|review finding|task \d+|as requested|per review)\b`)
 )
 
 // coupledGoComments returns the lines of Go comments in src that point at
