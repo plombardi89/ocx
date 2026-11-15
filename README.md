@@ -305,18 +305,6 @@ Sonnet is the same family as the Opus driver. The comparison rules only prefer a
 2. **Try a branch of this repository:** `make apply` from the checkout. Run `ocx apply` from a released binary to go back.
 3. **Remove:** `ocx remove` deletes the files `ocx apply` wrote.
 
-### Removing the old review hook
-
-Earlier versions installed a pre-push hook in each project, which rejected any push without an approving review. Pulling this version doesn't remove those copies. Run this in each project where you installed it. It removes the hook only if ocx installed it, and puts back the project's own hook if ocx had kept it aside:
-
-```sh
-hooks=$(git rev-parse --git-path hooks)
-if grep -q ocx-managed-hook "$hooks/pre-push" 2>/dev/null; then
-	rm "$hooks/pre-push"
-	if [ -f "$hooks/pre-push.local" ]; then mv "$hooks/pre-push.local" "$hooks/pre-push"; fi
-fi
-```
-
 ## Changes to ocx itself
 
 ocx changes go through the same loop as any project:
