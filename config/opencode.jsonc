@@ -38,6 +38,8 @@
     { "action": "shell", "resource": "git remote get-url *", "effect": "allow" },
     { "action": "shell", "resource": "git fetch *", "effect": "allow" },
     { "action": "shell", "resource": "git grep *", "effect": "allow" },
+    { "action": "shell", "resource": "git grep *-O*", "effect": "ask" },
+    { "action": "shell", "resource": "git grep *--open-files-in-pager*", "effect": "ask" },
     { "action": "shell", "resource": "git branch", "effect": "allow" },
     { "action": "shell", "resource": "git branch -a *", "effect": "allow" },
     { "action": "shell", "resource": "git branch -r *", "effect": "allow" },
@@ -94,35 +96,29 @@
     { "action": "shell", "resource": "which *", "effect": "allow" },
     { "action": "shell", "resource": "wc *", "effect": "allow" },
 
-    // Reading text. The file tools are better still, because they never
-    // ask; these cover output piped between commands.
+    // Reading text, for output piped between commands; the file tools are
+    // better still, because they never ask. Only commands that can't write
+    // files are here. rg and git grep can run other programs, so those
+    // forms ask, and so do find's forms that delete, run commands, or write.
+    // The find patterns match the action anywhere, because find works on
+    // the current directory when it's given no path.
     { "action": "shell", "resource": "cat *", "effect": "allow" },
     { "action": "shell", "resource": "head *", "effect": "allow" },
     { "action": "shell", "resource": "tail *", "effect": "allow" },
     { "action": "shell", "resource": "grep *", "effect": "allow" },
     { "action": "shell", "resource": "rg *", "effect": "allow" },
-    { "action": "shell", "resource": "sort *", "effect": "allow" },
-    { "action": "shell", "resource": "uniq *", "effect": "allow" },
+    { "action": "shell", "resource": "rg *--pre*", "effect": "ask" },
     { "action": "shell", "resource": "cut *", "effect": "allow" },
     { "action": "shell", "resource": "diff *", "effect": "allow" },
-    { "action": "shell", "resource": "file *", "effect": "allow" },
     { "action": "shell", "resource": "stat *", "effect": "allow" },
     { "action": "shell", "resource": "du *", "effect": "allow" },
     { "action": "shell", "resource": "jq *", "effect": "allow" },
-    { "action": "shell", "resource": "sed -n *", "effect": "allow" },
     { "action": "shell", "resource": "find *", "effect": "allow" },
-    // Some of these can also change files or run commands. The patterns
-    // match the action anywhere, because find works on the current
-    // directory when it's given no path.
     { "action": "shell", "resource": "find *-delete*", "effect": "ask" },
     { "action": "shell", "resource": "find *-exec*", "effect": "ask" },
     { "action": "shell", "resource": "find *-ok*", "effect": "ask" },
     { "action": "shell", "resource": "find *-fprint*", "effect": "ask" },
     { "action": "shell", "resource": "find *-fls*", "effect": "ask" },
-    { "action": "shell", "resource": "sed *-i*", "effect": "ask" },
-    { "action": "shell", "resource": "sed *--in-place*", "effect": "ask" },
-    { "action": "shell", "resource": "sort *-o*", "effect": "ask" },
-    { "action": "shell", "resource": "sort *--output*", "effect": "ask" },
 
     // Reading pull requests, CI runs, releases, and issues.
     { "action": "shell", "resource": "gh auth status *", "effect": "allow" },

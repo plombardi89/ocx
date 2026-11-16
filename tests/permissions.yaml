@@ -256,7 +256,7 @@ probes:
   - { agent: build, action: shell, resource: "cat README.md", expect: allow }
   - { agent: build, action: shell, resource: "head -20 internal/store/store.go", expect: allow }
   - { agent: build, action: shell, resource: "grep -rn TODO internal", expect: allow }
-  - { agent: build, action: shell, resource: "sed -n '10,40p' cmd/shop/main.go", expect: allow }
+  - { agent: build, action: shell, resource: "sed -n '10,40p' cmd/shop/main.go", expect: ask }
   - { agent: build, action: shell, resource: "jq .version package.json", expect: allow }
   - { agent: build, action: shell, resource: "diff a.txt b.txt", expect: allow }
   - { agent: build, action: shell, resource: "find . -name '*.go'", expect: allow }
@@ -271,7 +271,19 @@ probes:
   - { agent: build, action: shell, resource: "sed -n --in-place=.bak s/a/b/p main.go", expect: ask }
   - { agent: build, action: shell, resource: "sort -o sorted.txt names.txt", expect: ask }
   - { agent: build, action: shell, resource: "sort names.txt --output=sorted.txt", expect: ask }
-  - { agent: build, action: shell, resource: "sort -u names.txt", expect: allow }
+  - { agent: build, action: shell, resource: "sort -u names.txt", expect: ask }
+  - { agent: build, action: shell, resource: "uniq names.txt unique.txt", expect: ask }
+  - { agent: build, action: shell, resource: "sed -n 'w copy.txt' names.txt", expect: ask }
+  - { agent: build, action: shell, resource: "sort -uo sorted.txt names.txt", expect: ask }
+  - { agent: plan, action: shell, resource: "uniq names.txt unique.txt", expect: ask }
+  - { agent: explore, action: shell, resource: "sort -uo sorted.txt names.txt", expect: ask }
+  - { agent: build, action: shell, resource: "file -C -m magic", expect: ask }
+  - { agent: build, action: shell, resource: "rg --pre ./decode.sh secret", expect: ask }
+  - { agent: build, action: shell, resource: "rg --pre=./decode.sh secret", expect: ask }
+  - { agent: build, action: shell, resource: "rg -n Reserve internal", expect: allow }
+  - { agent: build, action: shell, resource: "git grep -O Reserve", expect: ask }
+  - { agent: build, action: shell, resource: "git grep --open-files-in-pager=vim Reserve", expect: ask }
+  - { agent: build, action: shell, resource: "cut -d: -f1 /etc/hosts", expect: allow }
   - { agent: build, action: shell, resource: "sed -i s/a/b/ main.go", expect: ask }
   - { agent: build, action: shell, resource: "git grep -n Reserve", expect: allow }
   - { agent: build, action: shell, resource: "git branch", expect: allow }
