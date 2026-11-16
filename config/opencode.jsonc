@@ -35,7 +35,18 @@
     { "action": "shell", "resource": "git branch --list *", "effect": "allow" },
     { "action": "shell", "resource": "git describe *", "effect": "allow" },
     { "action": "shell", "resource": "git remote -v", "effect": "allow" },
+    { "action": "shell", "resource": "git remote get-url *", "effect": "allow" },
     { "action": "shell", "resource": "git fetch *", "effect": "allow" },
+    { "action": "shell", "resource": "git grep *", "effect": "allow" },
+    { "action": "shell", "resource": "git branch", "effect": "allow" },
+    { "action": "shell", "resource": "git branch -a *", "effect": "allow" },
+    { "action": "shell", "resource": "git branch -r *", "effect": "allow" },
+    { "action": "shell", "resource": "git branch -v *", "effect": "allow" },
+    { "action": "shell", "resource": "git branch -vv *", "effect": "allow" },
+    { "action": "shell", "resource": "git worktree list *", "effect": "allow" },
+    { "action": "shell", "resource": "git stash list *", "effect": "allow" },
+    { "action": "shell", "resource": "git config --get *", "effect": "allow" },
+    { "action": "shell", "resource": "git config --list *", "effect": "allow" },
 
     { "action": "shell", "resource": "go build *", "effect": "allow" },
     { "action": "shell", "resource": "go test *", "effect": "allow" },
@@ -75,12 +86,52 @@
 
     { "action": "shell", "resource": "make test *", "effect": "allow" },
     { "action": "shell", "resource": "make check *", "effect": "allow" },
+    { "action": "shell", "resource": "make check-offline *", "effect": "allow" },
     { "action": "shell", "resource": "make lint *", "effect": "allow" },
 
     { "action": "shell", "resource": "ls *", "effect": "allow" },
     { "action": "shell", "resource": "pwd", "effect": "allow" },
     { "action": "shell", "resource": "which *", "effect": "allow" },
     { "action": "shell", "resource": "wc *", "effect": "allow" },
+
+    // Reading text. The file tools are better still, because they never
+    // ask; these cover output piped between commands.
+    { "action": "shell", "resource": "cat *", "effect": "allow" },
+    { "action": "shell", "resource": "head *", "effect": "allow" },
+    { "action": "shell", "resource": "tail *", "effect": "allow" },
+    { "action": "shell", "resource": "grep *", "effect": "allow" },
+    { "action": "shell", "resource": "rg *", "effect": "allow" },
+    { "action": "shell", "resource": "sort *", "effect": "allow" },
+    { "action": "shell", "resource": "uniq *", "effect": "allow" },
+    { "action": "shell", "resource": "cut *", "effect": "allow" },
+    { "action": "shell", "resource": "diff *", "effect": "allow" },
+    { "action": "shell", "resource": "file *", "effect": "allow" },
+    { "action": "shell", "resource": "stat *", "effect": "allow" },
+    { "action": "shell", "resource": "du *", "effect": "allow" },
+    { "action": "shell", "resource": "jq *", "effect": "allow" },
+    { "action": "shell", "resource": "sed -n *", "effect": "allow" },
+    { "action": "shell", "resource": "find *", "effect": "allow" },
+    // find can also delete files and run commands.
+    { "action": "shell", "resource": "find * -delete*", "effect": "ask" },
+    { "action": "shell", "resource": "find * -exec*", "effect": "ask" },
+    { "action": "shell", "resource": "find * -ok*", "effect": "ask" },
+    { "action": "shell", "resource": "find * -fprint*", "effect": "ask" },
+    { "action": "shell", "resource": "find * -fls *", "effect": "ask" },
+
+    // Reading pull requests, CI runs, releases, and issues.
+    { "action": "shell", "resource": "gh auth status *", "effect": "allow" },
+    { "action": "shell", "resource": "gh repo view *", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr list *", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr view *", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr diff *", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr checks *", "effect": "allow" },
+    { "action": "shell", "resource": "gh pr status *", "effect": "allow" },
+    { "action": "shell", "resource": "gh run list *", "effect": "allow" },
+    { "action": "shell", "resource": "gh run view *", "effect": "allow" },
+    { "action": "shell", "resource": "gh release list *", "effect": "allow" },
+    { "action": "shell", "resource": "gh release view *", "effect": "allow" },
+    { "action": "shell", "resource": "gh issue list *", "effect": "allow" },
+    { "action": "shell", "resource": "gh issue view *", "effect": "allow" },
 
     // Writing to git history and the remote is build's job (see agents.build).
     { "action": "shell", "resource": "git commit *", "effect": "deny" },
@@ -195,13 +246,32 @@
         { "action": "shell", "resource": "git checkout -b *", "effect": "allow" },
         { "action": "shell", "resource": "git push *", "effect": "allow" },
         { "action": "shell", "resource": "gh pr create *", "effect": "allow" },
-        { "action": "shell", "resource": "gh pr view *", "effect": "allow" },
-        { "action": "shell", "resource": "gh pr status *", "effect": "allow" },
-        { "action": "shell", "resource": "gh pr checks *", "effect": "allow" },
+        { "action": "shell", "resource": "gh pr edit *", "effect": "allow" },
         { "action": "shell", "resource": "go mod tidy *", "effect": "allow" },
         { "action": "shell", "resource": "gofmt -w *", "effect": "allow" },
         { "action": "shell", "resource": "go fmt *", "effect": "allow" },
-        { "action": "shell", "resource": "ruff format *", "effect": "allow" }
+        { "action": "shell", "resource": "ruff format *", "effect": "allow" },
+
+        // Everyday branch work. Discarding work for good (git reset --hard,
+        // git branch -D, rm) still asks.
+        { "action": "shell", "resource": "git merge *", "effect": "allow" },
+        { "action": "shell", "resource": "git cherry-pick *", "effect": "allow" },
+        { "action": "shell", "resource": "git stash *", "effect": "allow" },
+        { "action": "shell", "resource": "git rm *", "effect": "allow" },
+        { "action": "shell", "resource": "git mv *", "effect": "allow" },
+        { "action": "shell", "resource": "git restore *", "effect": "allow" },
+        { "action": "shell", "resource": "git branch -d *", "effect": "allow" },
+        { "action": "shell", "resource": "git worktree *", "effect": "allow" },
+
+        // The project's own targets, scratch programs, and moving files.
+        { "action": "shell", "resource": "make *", "effect": "allow" },
+        { "action": "shell", "resource": "go run *", "effect": "allow" },
+        { "action": "shell", "resource": "mkdir *", "effect": "allow" },
+        { "action": "shell", "resource": "cp *", "effect": "allow" },
+        { "action": "shell", "resource": "mv *", "effect": "allow" },
+
+        // OpenCode's own scratch directory, for worktrees and temporary files.
+        { "action": "external_directory", "resource": "/tmp/opencode/*", "effect": "allow" }
       ]
     },
 
@@ -526,6 +596,7 @@
         { "action": "shell", "resource": "./gradlew test *", "effect": "allow" },
         { "action": "shell", "resource": "make test *", "effect": "allow" },
         { "action": "shell", "resource": "make check *", "effect": "allow" },
+        { "action": "shell", "resource": "make check-offline *", "effect": "allow" },
         { "action": "shell", "resource": "make lint *", "effect": "allow" },
         { "action": "shell", "resource": "ls *", "effect": "allow" },
         { "action": "shell", "resource": "wc *", "effect": "allow" }

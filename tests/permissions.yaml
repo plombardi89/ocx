@@ -189,7 +189,7 @@ probes:
   - { agent: build, action: shell, resource: "git notes --ref=ocreview show HEAD", expect: allow }
   - { agent: build, action: shell, resource: "git --no-pager log --oneline", expect: ask }
   - { agent: build, action: shell, resource: "git config user.email agent@example.com", expect: deny }
-  - { agent: build, action: shell, resource: "git config --get user.email", expect: ask }
+  - { agent: build, action: shell, resource: "git config --get user.email", expect: allow }
   - { agent: build, action: shell, resource: "gh pr create --base main --fill", expect: allow }
   - { agent: build, action: shell, resource: "gh pr create --draft --base main --fill", expect: allow }
   - { agent: build, action: shell, resource: "gh pr ready 12", expect: deny }
@@ -249,3 +249,63 @@ probes:
   - { agent: explore, action: edit, resource: main.go, expect: deny }
   - { agent: general, action: shell, resource: "git notes --ref=ocreview add -m forged HEAD", expect: deny }
   - { agent: general, action: shell, resource: "git push origin main", expect: deny }
+
+  # every built-in agent: reading text, read-only git and gh, and the
+  # project's checks run without asking; find that deletes or runs commands
+  # still asks
+  - { agent: build, action: shell, resource: "cat README.md", expect: allow }
+  - { agent: build, action: shell, resource: "head -20 internal/store/store.go", expect: allow }
+  - { agent: build, action: shell, resource: "grep -rn TODO internal", expect: allow }
+  - { agent: build, action: shell, resource: "sed -n '10,40p' cmd/shop/main.go", expect: allow }
+  - { agent: build, action: shell, resource: "jq .version package.json", expect: allow }
+  - { agent: build, action: shell, resource: "diff a.txt b.txt", expect: allow }
+  - { agent: build, action: shell, resource: "find . -name '*.go'", expect: allow }
+  - { agent: build, action: shell, resource: "find . -name '*.tmp' -delete", expect: ask }
+  - { agent: build, action: shell, resource: "find . -name '*.go' -exec rm {} ;", expect: ask }
+  - { agent: build, action: shell, resource: "sed -i s/a/b/ main.go", expect: ask }
+  - { agent: build, action: shell, resource: "git grep -n Reserve", expect: allow }
+  - { agent: build, action: shell, resource: "git branch", expect: allow }
+  - { agent: build, action: shell, resource: "git branch -a", expect: allow }
+  - { agent: build, action: shell, resource: "git worktree list", expect: allow }
+  - { agent: build, action: shell, resource: "git remote get-url origin", expect: allow }
+  - { agent: build, action: shell, resource: "gh run list --limit 3", expect: allow }
+  - { agent: build, action: shell, resource: "gh release view latest", expect: allow }
+  - { agent: build, action: shell, resource: "gh pr view 12", expect: allow }
+  - { agent: build, action: shell, resource: "make check-offline", expect: allow }
+  - { agent: plan, action: shell, resource: "cat README.md", expect: allow }
+  - { agent: plan, action: shell, resource: "make check-offline", expect: allow }
+  - { agent: explore, action: shell, resource: "grep -rn Reserve .", expect: allow }
+  - { agent: general, action: shell, resource: "cat README.md", expect: allow }
+  - { agent: reviewer, action: shell, resource: "make check-offline", expect: allow }
+
+  # build only: branch work, every make target, scratch programs, moving
+  # files, and OpenCode's scratch directory; discarding work still asks
+  - { agent: build, action: shell, resource: "git merge --no-ff origin/main", expect: allow }
+  - { agent: build, action: shell, resource: "git cherry-pick abc1234", expect: allow }
+  - { agent: build, action: shell, resource: "git stash", expect: allow }
+  - { agent: build, action: shell, resource: "git rm docs/plans/0001-old.md", expect: allow }
+  - { agent: build, action: shell, resource: "git mv a.go b.go", expect: allow }
+  - { agent: build, action: shell, resource: "git restore --staged a.go", expect: allow }
+  - { agent: build, action: shell, resource: "git branch -d feat/merged", expect: allow }
+  - { agent: build, action: shell, resource: "git worktree add -q -b feat/x /tmp/opencode/ocx-x origin/main", expect: allow }
+  - { agent: build, action: shell, resource: "git worktree remove --force /tmp/opencode/ocx-x", expect: allow }
+  - { agent: build, action: shell, resource: "make apply", expect: allow }
+  - { agent: build, action: shell, resource: "make fmt", expect: allow }
+  - { agent: build, action: shell, resource: "go run ./cmd/shop", expect: allow }
+  - { agent: build, action: shell, resource: "mkdir -p docs/adr", expect: allow }
+  - { agent: build, action: shell, resource: "cp a.txt b.txt", expect: allow }
+  - { agent: build, action: shell, resource: "mv a.txt b.txt", expect: allow }
+  - { agent: build, action: shell, resource: "gh pr edit 12 --body-file /tmp/opencode/body.md", expect: allow }
+  - { agent: build, action: external_directory, resource: "/tmp/opencode/ocx-x/*", expect: allow }
+  - { agent: build, action: external_directory, resource: "/tmp/other/*", expect: ask }
+  - { agent: build, action: shell, resource: "git branch -D feat/unmerged", expect: ask }
+  - { agent: build, action: shell, resource: "git reset --hard HEAD~1", expect: ask }
+  - { agent: build, action: shell, resource: "rm -rf build", expect: ask }
+  - { agent: build, action: shell, resource: "chmod +x run.sh", expect: ask }
+  - { agent: build, action: shell, resource: "python3 - <<'EOF'\nprint(1)\nEOF", expect: ask }
+  - { agent: build, action: shell, resource: "make apply ARGS=--config-dir /mnt/c/Users/phil", expect: deny }
+  - { agent: build, action: shell, resource: "cp notes.txt /mnt/cache/", expect: deny }
+  - { agent: plan, action: shell, resource: "git merge --no-ff origin/main", expect: ask }
+  - { agent: plan, action: shell, resource: "make apply", expect: ask }
+  - { agent: plan, action: shell, resource: "mkdir x", expect: ask }
+  - { agent: plan, action: external_directory, resource: "/tmp/opencode/ocx-x/*", expect: ask }
