@@ -280,6 +280,9 @@ probes:
   - { agent: build, action: shell, resource: "file -C -m magic", expect: ask }
   - { agent: build, action: shell, resource: "rg --pre ./decode.sh secret", expect: ask }
   - { agent: build, action: shell, resource: "rg --pre=./decode.sh secret", expect: ask }
+  - { agent: build, action: shell, resource: "rg --hostname-bin ./host.sh --hyperlink-format=default -H Reserve", expect: ask }
+  - { agent: build, action: shell, resource: "rg --hostname-bin=./host.sh -H Reserve", expect: ask }
+  - { agent: explore, action: shell, resource: "rg --hostname-bin ./host.sh -H Reserve", expect: ask }
   - { agent: build, action: shell, resource: "rg -n Reserve internal", expect: allow }
   - { agent: build, action: shell, resource: "git grep -O Reserve", expect: ask }
   - { agent: build, action: shell, resource: "git grep --open-files-in-pager=vim Reserve", expect: ask }
@@ -331,3 +334,40 @@ probes:
   - { agent: plan, action: shell, resource: "make apply", expect: ask }
   - { agent: plan, action: shell, resource: "mkdir x", expect: ask }
   - { agent: plan, action: external_directory, resource: "/tmp/opencode/ocx-x/*", expect: ask }
+
+  # Go: every built-in agent reads module facts; build runs every command
+  # that works on the project; changing the machine's Go setup still asks,
+  # and subagents can't do it at all
+  - { agent: build, action: shell, resource: "go version -m bin/ocx", expect: allow }
+  - { agent: plan, action: shell, resource: "go version -m bin/ocx", expect: allow }
+  - { agent: plan, action: shell, resource: "go mod graph", expect: allow }
+  - { agent: explore, action: shell, resource: "go mod why golang.org/x/mod", expect: allow }
+  - { agent: general, action: shell, resource: "go mod verify", expect: allow }
+  - { agent: build, action: shell, resource: "go mod tidy", expect: allow }
+  - { agent: build, action: shell, resource: "go mod download", expect: allow }
+  - { agent: build, action: shell, resource: "go mod init example.com/shop", expect: allow }
+  - { agent: build, action: shell, resource: "go mod edit -go=1.25", expect: allow }
+  - { agent: build, action: shell, resource: "go mod vendor", expect: allow }
+  - { agent: build, action: shell, resource: "go get golang.org/x/mod@latest", expect: allow }
+  - { agent: build, action: shell, resource: "go generate ./...", expect: allow }
+  - { agent: build, action: shell, resource: "go fix ./...", expect: allow }
+  - { agent: build, action: shell, resource: "go work init .", expect: allow }
+  - { agent: build, action: shell, resource: "go tool cover -html=cover.out -o cover.html", expect: allow }
+  - { agent: build, action: shell, resource: "go clean -testcache", expect: allow }
+  - { agent: build, action: shell, resource: "go clean -modcache", expect: allow }
+  - { agent: build, action: shell, resource: "go env GOPATH", expect: allow }
+  - { agent: build, action: shell, resource: "go env -json", expect: allow }
+  - { agent: build, action: shell, resource: "go env -w GOFLAGS=-mod=mod", expect: ask }
+  - { agent: build, action: shell, resource: "go env -u GOFLAGS", expect: ask }
+  - { agent: plan, action: shell, resource: "go env -w GOPROXY=direct", expect: ask }
+  - { agent: build, action: shell, resource: "go install golang.org/x/tools/cmd/goimports@latest", expect: ask }
+  - { agent: build, action: shell, resource: "go telemetry off", expect: ask }
+  - { agent: build, action: shell, resource: "go bug", expect: ask }
+  - { agent: plan, action: shell, resource: "go get golang.org/x/mod@latest", expect: ask }
+  - { agent: plan, action: shell, resource: "go generate ./...", expect: ask }
+  - { agent: plan, action: shell, resource: "go mod tidy", expect: ask }
+  - { agent: explore, action: shell, resource: "go clean -cache", expect: ask }
+  - { agent: reviewer, action: shell, resource: "go env GOPATH", expect: allow }
+  - { agent: reviewer, action: shell, resource: "go env -w GOFLAGS=-mod=mod", expect: deny }
+  - { agent: debugger, action: shell, resource: "go env -u GOFLAGS", expect: deny }
+  - { agent: test-writer, action: shell, resource: "go env -w GOPROXY=direct", expect: deny }

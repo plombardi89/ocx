@@ -56,7 +56,13 @@
     { "action": "shell", "resource": "go list *", "effect": "allow" },
     { "action": "shell", "resource": "go doc *", "effect": "allow" },
     { "action": "shell", "resource": "go env *", "effect": "allow" },
-    { "action": "shell", "resource": "go version", "effect": "allow" },
+    // These change Go's settings for every project on the machine.
+    { "action": "shell", "resource": "go env *-w*", "effect": "ask" },
+    { "action": "shell", "resource": "go env *-u*", "effect": "ask" },
+    { "action": "shell", "resource": "go version *", "effect": "allow" },
+    { "action": "shell", "resource": "go mod graph *", "effect": "allow" },
+    { "action": "shell", "resource": "go mod why *", "effect": "allow" },
+    { "action": "shell", "resource": "go mod verify *", "effect": "allow" },
     { "action": "shell", "resource": "gofmt -l *", "effect": "allow" },
     { "action": "shell", "resource": "gofmt -d *", "effect": "allow" },
     { "action": "shell", "resource": "golangci-lint run *", "effect": "allow" },
@@ -108,6 +114,7 @@
     { "action": "shell", "resource": "grep *", "effect": "allow" },
     { "action": "shell", "resource": "rg *", "effect": "allow" },
     { "action": "shell", "resource": "rg *--pre*", "effect": "ask" },
+    { "action": "shell", "resource": "rg *--hostname-bin*", "effect": "ask" },
     { "action": "shell", "resource": "cut *", "effect": "allow" },
     { "action": "shell", "resource": "diff *", "effect": "allow" },
     { "action": "shell", "resource": "stat *", "effect": "allow" },
@@ -249,7 +256,6 @@
         { "action": "shell", "resource": "git push *", "effect": "allow" },
         { "action": "shell", "resource": "gh pr create *", "effect": "allow" },
         { "action": "shell", "resource": "gh pr edit *", "effect": "allow" },
-        { "action": "shell", "resource": "go mod tidy *", "effect": "allow" },
         { "action": "shell", "resource": "gofmt -w *", "effect": "allow" },
         { "action": "shell", "resource": "go fmt *", "effect": "allow" },
         { "action": "shell", "resource": "ruff format *", "effect": "allow" },
@@ -267,10 +273,21 @@
 
         // The project's own targets, scratch programs, and moving files.
         { "action": "shell", "resource": "make *", "effect": "allow" },
-        { "action": "shell", "resource": "go run *", "effect": "allow" },
         { "action": "shell", "resource": "mkdir *", "effect": "allow" },
         { "action": "shell", "resource": "cp *", "effect": "allow" },
         { "action": "shell", "resource": "mv *", "effect": "allow" },
+
+        // Go commands for working on the project. go install, go env -w and
+        // -u, and go telemetry change the machine's Go setup, so they still
+        // ask.
+        { "action": "shell", "resource": "go run *", "effect": "allow" },
+        { "action": "shell", "resource": "go mod *", "effect": "allow" },
+        { "action": "shell", "resource": "go get *", "effect": "allow" },
+        { "action": "shell", "resource": "go generate *", "effect": "allow" },
+        { "action": "shell", "resource": "go fix *", "effect": "allow" },
+        { "action": "shell", "resource": "go work *", "effect": "allow" },
+        { "action": "shell", "resource": "go tool *", "effect": "allow" },
+        { "action": "shell", "resource": "go clean *", "effect": "allow" },
 
         // OpenCode's own scratch directory, for worktrees and temporary files.
         { "action": "external_directory", "resource": "/tmp/opencode/*", "effect": "allow" }
@@ -373,6 +390,8 @@
         { "action": "shell", "resource": "go list *", "effect": "allow" },
         { "action": "shell", "resource": "go doc *", "effect": "allow" },
         { "action": "shell", "resource": "go env *", "effect": "allow" },
+        { "action": "shell", "resource": "go env *-w*", "effect": "deny" },
+        { "action": "shell", "resource": "go env *-u*", "effect": "deny" },
         { "action": "shell", "resource": "gofmt -l *", "effect": "allow" },
         { "action": "shell", "resource": "gofmt -d *", "effect": "allow" },
         { "action": "shell", "resource": "pytest *", "effect": "allow" },
@@ -448,6 +467,8 @@
         { "action": "shell", "resource": "go list *", "effect": "allow" },
         { "action": "shell", "resource": "go doc *", "effect": "allow" },
         { "action": "shell", "resource": "go env *", "effect": "allow" },
+        { "action": "shell", "resource": "go env *-w*", "effect": "deny" },
+        { "action": "shell", "resource": "go env *-u*", "effect": "deny" },
         { "action": "shell", "resource": "gofmt -l *", "effect": "allow" },
         { "action": "shell", "resource": "gofmt -d *", "effect": "allow" },
         { "action": "shell", "resource": "pytest *", "effect": "allow" },
@@ -576,6 +597,8 @@
         { "action": "shell", "resource": "go list *", "effect": "allow" },
         { "action": "shell", "resource": "go doc *", "effect": "allow" },
         { "action": "shell", "resource": "go env *", "effect": "allow" },
+        { "action": "shell", "resource": "go env *-w*", "effect": "deny" },
+        { "action": "shell", "resource": "go env *-u*", "effect": "deny" },
         { "action": "shell", "resource": "gofmt -l *", "effect": "allow" },
         { "action": "shell", "resource": "gofmt -d *", "effect": "allow" },
         { "action": "shell", "resource": "golangci-lint run *", "effect": "allow" },
