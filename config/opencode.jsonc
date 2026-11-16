@@ -111,12 +111,18 @@
     { "action": "shell", "resource": "jq *", "effect": "allow" },
     { "action": "shell", "resource": "sed -n *", "effect": "allow" },
     { "action": "shell", "resource": "find *", "effect": "allow" },
-    // find can also delete files and run commands.
-    { "action": "shell", "resource": "find * -delete*", "effect": "ask" },
-    { "action": "shell", "resource": "find * -exec*", "effect": "ask" },
-    { "action": "shell", "resource": "find * -ok*", "effect": "ask" },
-    { "action": "shell", "resource": "find * -fprint*", "effect": "ask" },
-    { "action": "shell", "resource": "find * -fls *", "effect": "ask" },
+    // Some of these can also change files or run commands. The patterns
+    // match the action anywhere, because find works on the current
+    // directory when it's given no path.
+    { "action": "shell", "resource": "find *-delete*", "effect": "ask" },
+    { "action": "shell", "resource": "find *-exec*", "effect": "ask" },
+    { "action": "shell", "resource": "find *-ok*", "effect": "ask" },
+    { "action": "shell", "resource": "find *-fprint*", "effect": "ask" },
+    { "action": "shell", "resource": "find *-fls*", "effect": "ask" },
+    { "action": "shell", "resource": "sed *-i*", "effect": "ask" },
+    { "action": "shell", "resource": "sed *--in-place*", "effect": "ask" },
+    { "action": "shell", "resource": "sort *-o*", "effect": "ask" },
+    { "action": "shell", "resource": "sort *--output*", "effect": "ask" },
 
     // Reading pull requests, CI runs, releases, and issues.
     { "action": "shell", "resource": "gh auth status *", "effect": "allow" },

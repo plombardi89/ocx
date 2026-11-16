@@ -262,6 +262,16 @@ probes:
   - { agent: build, action: shell, resource: "find . -name '*.go'", expect: allow }
   - { agent: build, action: shell, resource: "find . -name '*.tmp' -delete", expect: ask }
   - { agent: build, action: shell, resource: "find . -name '*.go' -exec rm {} ;", expect: ask }
+  - { agent: build, action: shell, resource: "find -delete", expect: ask }
+  - { agent: build, action: shell, resource: "find -exec rm {} ;", expect: ask }
+  - { agent: build, action: shell, resource: "find -execdir rm {} ;", expect: ask }
+  - { agent: build, action: shell, resource: "find -fprint found.txt", expect: ask }
+  - { agent: plan, action: shell, resource: "find -delete", expect: ask }
+  - { agent: build, action: shell, resource: "sed -n -i s/a/b/p main.go", expect: ask }
+  - { agent: build, action: shell, resource: "sed -n --in-place=.bak s/a/b/p main.go", expect: ask }
+  - { agent: build, action: shell, resource: "sort -o sorted.txt names.txt", expect: ask }
+  - { agent: build, action: shell, resource: "sort names.txt --output=sorted.txt", expect: ask }
+  - { agent: build, action: shell, resource: "sort -u names.txt", expect: allow }
   - { agent: build, action: shell, resource: "sed -i s/a/b/ main.go", expect: ask }
   - { agent: build, action: shell, resource: "git grep -n Reserve", expect: allow }
   - { agent: build, action: shell, resource: "git branch", expect: allow }
