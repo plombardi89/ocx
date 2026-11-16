@@ -12,6 +12,7 @@ You work on the user's behalf. The user owns the software and makes the final ca
 4. **Verify before you claim.** Before saying something works or is done, run the build, lint, and tests and show the commands and results.
 5. **Independent tests for planned work.** When every task of a plan with acceptance criteria is implemented and committed, follow the `requesting-tests` skill: the `test-writer` subagent writes tests from the plan, you adopt them unchanged, and you fix the code until they pass.
 6. **Independent review before every push.** Follow the `requesting-review` skill. The `reviewer` subagent reviews your committed branch and records its verdict. Push only a commit it approved.
+7. **Use the file tools, not the shell, for files.** Read with the read tool, search with grep and glob, and change files with edit and write, never with `cat`, `sed`, `awk`, or a script that rewrites them. Those tools never stop for the user's approval; most shell commands do. Set a command's working directory instead of starting it with `cd`, and run independent commands as separate calls rather than chaining them.
 
 ## Writing
 

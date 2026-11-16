@@ -8,10 +8,8 @@ import (
 	"testing"
 )
 
-// TestLintInstallsItsToolInACheckoutPathWithSpaces runs make lint in a copy
-// of the Makefile whose directory name has a space, with a stand-in go that
-// records where it was asked to install golangci-lint and installs a
-// stand-in for it there.
+// A stand-in go keeps this check of where make lint installs golangci-lint
+// fast and independent of module downloads.
 func TestLintInstallsItsToolInACheckoutPathWithSpaces(t *testing.T) {
 	skipInNestedRun(t)
 	requireMake(t)
